@@ -1,0 +1,767 @@
+import {
+  Campaign,
+  KOL,
+  ContentItem,
+  ScriptVersion,
+  VideoVersion,
+  Review,
+  TimelineEvent,
+  AssetType,
+  UserRole,
+  PerformanceData,
+} from '../types';
+import {
+  INITIAL_CAMPAIGNS,
+  INITIAL_KOLS,
+  INITIAL_CONTENTS,
+  INITIAL_SCRIPT_VERSIONS,
+  INITIAL_VIDEO_VERSIONS,
+  INITIAL_REVIEWS,
+  INITIAL_TIMELINES,
+} from '../data/mockData';
+
+const STORAGE_KEYS = {
+  CAMPAIGNS: 'kol_hub_campaigns_v1',
+  KOLS: 'kol_hub_kols_v1',
+  CONTENTS: 'kol_hub_contents_v1',
+  SCRIPT_VERSIONS: 'kol_hub_scripts_v1',
+  VIDEO_VERSIONS: 'kol_hub_videos_v1',
+  REVIEWS: 'kol_hub_reviews_v1',
+  TIMELINES: 'kol_hub_timelines_v1',
+  USER_ROLE: 'kol_hub_user_role_v1',
+};
+
+class DataService {
+  private campaigns: Campaign[];
+  private kols: KOL[];
+  private contents: ContentItem[];
+  private scriptVersions: ScriptVersion[];
+  private videoVersions: VideoVersion[];
+  private reviews: Review[];
+  private timelines: TimelineEvent[];
+  private currentRole: UserRole;
+  private lastServerTimestamp: string = '';
+  private listeners: Set<() => void> = new Set();
+  private pollTimer: any = null;
+
+  constructor() {
+    this.campaigns = this.loadFromStorage(STORAGE_KEYS.CAMPAIGNS, INITIAL_CAMPAIGNS);
+    this.kols = this.loadFromStorage(STORAGE_KEYS.KOLS, INITIAL_KOLS);
+    this.contents = this.loadFromStorage(STORAGE_KEYS.CONTENTS, INITIAL_CONTENTS);
+    this.scriptVersions = this.loadFromStorage(STORAGE_KEYS.SCRIPT_VERSIONS, INITIAL_SCRIPT_VERSIONS);
+    this.videoVersions = this.loadFromStorage(STORAGE_KEYS.VIDEO_VERSIONS, INITIAL_VIDEO_VERSIONS);
+    this.reviews = this.loadFromStorage(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
+    this.timelines = this.loadFromStorage(STORAGE_KEYS.TIMELINES, INITIAL_TIMELINES);
+    this.currentRole = this.loadFromStorage(STORAGE_KEYS.USER_ROLE, 'Me');
+
+    // Initial sync from Express backend & start polling
+    this.fetchServerData();
+    this.startPolling();
+  }
+
+  private loadFromStorage<T>(key: string, fallback: T): T {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CAMPAIGNS, JSON.stringify(this.campaigns));
+      localStorage.setItem(STORAGE_KEYS.KOLS, JSON.stringify(this.kols));
+      localStorage.setItem(STORAGE_KEYS.CONTENTS, JSON.stringify(this.contents));
+      localStorage.setItem(STORAGE_KEYS.SCRIPT_VERSIONS, JSON.stringify(this.scriptVersions));
+      localStorage.setItem(STORAGE_KEYS.VIDEO_VERSIONS, JSON.stringify(this.videoVersions));
+      localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(this.reviews));
+      localStorage.setItem(STORAGE_KEYS.TIMELINES, JSON.stringify(this.timelines));
+      this.notifyListeners();
+    } catch (e) {
+      console.error('Failed to save to localStorage', e);
+    }
+  }
+
+  public subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach((listener) => listener());
+  }
+
+  // --- Backend Sync Methods ---
+
+  private async fetchServerData() {
+    try {
+      const res = await fetch('/api/data');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.updatedAt && data.updatedAt !== this.lastServerTimestamp) {
+          this.lastServerTimestamp = data.updatedAt;
+          this.campaigns = data.campaigns || [];
+          this.kols = data.kols || [];
+          this.contents = data.contents || [];
+          this.scriptVersions = data.scriptVersions || [];
+          this.videoVersions = data.videoVersions || [];
+          this.reviews = data.reviews || [];
+          this.timelines = data.timelines || [];
+          this.saveToStorage();
+        }
+      }
+    } catch (e) {
+      // Offline / fallback to local state
+    }
+  }
+
+  private startPolling() {
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = setInterval(() => {
+      this.fetchServerData();
+    }, 2500);
+  }
+
+  public resetToDemoData() {
+    fetch('/api/reset', { method: 'POST' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data) {
+          this.campaigns = data.data.campaigns;
+          this.kols = data.data.kols;
+          this.contents = data.data.contents;
+          this.scriptVersions = data.data.scriptVersions;
+          this.videoVersions = data.data.videoVersions;
+          this.reviews = data.data.reviews;
+          this.timelines = data.data.timelines;
+          this.saveToStorage();
+        }
+      })
+      .catch(() => {
+        this.campaigns = [...INITIAL_CAMPAIGNS];
+        this.kols = [...INITIAL_KOLS];
+        this.contents = [...INITIAL_CONTENTS];
+        this.scriptVersions = [...INITIAL_SCRIPT_VERSIONS];
+        this.videoVersions = [...INITIAL_VIDEO_VERSIONS];
+        this.reviews = [...INITIAL_REVIEWS];
+        this.timelines = [...INITIAL_TIMELINES];
+        this.saveToStorage();
+      });
+  }
+
+  // --- Campaign Methods ---
+  public getCampaigns(): Campaign[] {
+    return [...this.campaigns];
+  }
+
+  public getCampaignById(id: string): Campaign | undefined {
+    return this.campaigns.find((c) => c.id === id);
+  }
+
+  public addCampaign(camp: Omit<Campaign, 'id' | 'createdAt' | 'updatedAt'>): Campaign {
+    const newCamp: Campaign = {
+      ...camp,
+      id: `camp-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.campaigns.unshift(newCamp);
+    this.saveToStorage();
+
+    fetch('/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(camp),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+
+    return newCamp;
+  }
+
+  public updateCampaign(camp: Campaign) {
+    const index = this.campaigns.findIndex((c) => c.id === camp.id);
+    if (index !== -1) {
+      this.campaigns[index] = { ...camp, updatedAt: new Date().toISOString() };
+      this.saveToStorage();
+
+      fetch(`/api/campaigns/${camp.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(camp),
+      })
+        .then(() => this.fetchServerData())
+        .catch(() => {});
+    }
+  }
+
+  // --- KOL Methods ---
+  public getKols(): KOL[] {
+    return [...this.kols];
+  }
+
+  public getKolById(id: string): KOL | undefined {
+    return this.kols.find((k) => k.id === id);
+  }
+
+  public addKol(kol: Omit<KOL, 'id' | 'createdAt' | 'updatedAt'>): KOL {
+    const newKol: KOL = {
+      ...kol,
+      id: `kol-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.kols.unshift(newKol);
+    this.saveToStorage();
+
+    fetch('/api/kols', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(kol),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+
+    return newKol;
+  }
+
+  public updateKol(kol: KOL) {
+    const index = this.kols.findIndex((k) => k.id === kol.id);
+    if (index !== -1) {
+      this.kols[index] = { ...kol, updatedAt: new Date().toISOString() };
+      this.saveToStorage();
+
+      fetch(`/api/kols/${kol.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(kol),
+      })
+        .then(() => this.fetchServerData())
+        .catch(() => {});
+    }
+  }
+
+  // --- Content Methods ---
+  public getContents(): ContentItem[] {
+    return [...this.contents];
+  }
+
+  public getContentById(id: string): ContentItem | undefined {
+    return this.contents.find((c) => c.id === id);
+  }
+
+  public addContent(data: Omit<ContentItem, 'id' | 'createdAt' | 'updatedAt'>): ContentItem {
+    const newContent: ContentItem = {
+      ...data,
+      id: `cnt-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.contents.unshift(newContent);
+
+    this.addTimelineEvent({
+      contentId: newContent.id,
+      title: '创建 Content 任务',
+      description: `新建了内容任务《${newContent.title}》，并初始化为 ${newContent.stage} 阶段`,
+      actor: 'Me',
+      type: 'brief',
+    });
+
+    this.saveToStorage();
+
+    fetch('/api/contents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+
+    return newContent;
+  }
+
+  public updateContent(content: ContentItem) {
+    const index = this.contents.findIndex((c) => c.id === content.id);
+    if (index !== -1) {
+      this.contents[index] = { ...content, updatedAt: new Date().toISOString() };
+      this.saveToStorage();
+
+      fetch(`/api/contents/${content.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(content),
+      })
+        .then(() => this.fetchServerData())
+        .catch(() => {});
+    }
+  }
+
+  // --- Version & Review Queries ---
+  public getScriptVersions(contentId: string): ScriptVersion[] {
+    return this.scriptVersions
+      .filter((sv) => sv.contentId === contentId)
+      .sort((a, b) => a.versionNumber - b.versionNumber);
+  }
+
+  public getVideoVersions(contentId: string): VideoVersion[] {
+    return this.videoVersions
+      .filter((vv) => vv.contentId === contentId)
+      .sort((a, b) => a.versionNumber - b.versionNumber);
+  }
+
+  public getReviews(contentId: string, assetType?: AssetType, versionId?: string): Review[] {
+    return this.reviews.filter((r) => {
+      if (r.contentId !== contentId) return false;
+      if (assetType && r.assetType !== assetType) return false;
+      if (versionId && r.versionId !== versionId) return false;
+      return true;
+    });
+  }
+
+  public getTimelineEvents(contentId: string): TimelineEvent[] {
+    return this.timelines
+      .filter((t) => t.contentId === contentId)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  }
+
+  // --- Helper Timeline Event Generator ---
+  private addTimelineEvent(evt: {
+    contentId: string;
+    title: string;
+    description: string;
+    actor: 'System' | 'Me' | 'Agency' | 'KOL';
+    type: TimelineEvent['type'];
+  }) {
+    const nowStr = new Date().toLocaleString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    this.timelines.push({
+      id: `tl-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      contentId: evt.contentId,
+      title: evt.title,
+      description: evt.description,
+      actor: evt.actor,
+      timestamp: nowStr,
+      type: evt.type,
+    });
+  }
+
+  // --- BUSINESS WORKFLOW ACTIONS ---
+
+  // 1. Agency Adds Review
+  public addAgencyReview(contentId: string, assetType: AssetType, versionId: string, reviewContent: string) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    const newRev: Review = {
+      id: `rev-${Date.now()}`,
+      contentId,
+      assetType,
+      versionId,
+      reviewerType: 'Agency',
+      reviewContent: `省广意见：${reviewContent}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.reviews.push(newRev);
+
+    content.status = 'Waiting for My Review';
+    content.currentOwner = 'Me';
+    content.updatedAt = new Date().toISOString();
+
+    this.addTimelineEvent({
+      contentId,
+      title: `省广完成 ${assetType === 'Script' ? '脚本' : '视频'} 审核`,
+      description: `省广录入了审核意见，移交“我的审核” (Waiting for My Review)`,
+      actor: 'Agency',
+      type: 'agency_rev',
+    });
+
+    this.saveToStorage();
+
+    fetch('/api/agency-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId, assetType, versionId, reviewContent }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+  }
+
+  // 2. Submit My Script Review
+  public submitMyScriptReview(
+    contentId: string,
+    versionId: string,
+    outcome: 'Approve' | 'Request Revision',
+    myReview: string,
+    finalFeedback?: string
+  ) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    const scriptVer = this.scriptVersions.find((v) => v.id === versionId);
+
+    if (myReview) {
+      this.reviews.push({
+        id: `rev-${Date.now()}-me`,
+        contentId,
+        assetType: 'Script',
+        versionId,
+        reviewerType: 'Me',
+        reviewContent: `我的意见：${myReview}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    if (outcome === 'Approve') {
+      if (scriptVer) scriptVer.status = 'Approved';
+      content.stage = 'Video';
+      content.status = 'Waiting for KOL Video';
+      content.currentOwner = 'KOL';
+
+      this.addTimelineEvent({
+        contentId,
+        title: '脚本审核通过 (Script Approved)',
+        description: `最终确认通过脚本 V${scriptVer?.versionNumber || ''}！阶段流转至视频制作，等待达人交付视频`,
+        actor: 'Me',
+        type: 'approved',
+      });
+    } else {
+      if (scriptVer) scriptVer.status = 'Revision Requested';
+      content.status = 'Waiting for KOL Revision';
+      content.currentOwner = 'KOL';
+
+      if (finalFeedback) {
+        this.reviews.push({
+          id: `rev-${Date.now()}-final`,
+          contentId,
+          assetType: 'Script',
+          versionId,
+          reviewerType: 'Final Feedback',
+          reviewContent: `最终修改意见：${finalFeedback}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      this.addTimelineEvent({
+        contentId,
+        title: '脚本要求修改 (Request Revision)',
+        description: `要求达人对 Script V${scriptVer?.versionNumber || ''} 进行修改，反馈已推送到达人端`,
+        actor: 'Me',
+        type: 'revision_req',
+      });
+    }
+
+    content.updatedAt = new Date().toISOString();
+    this.saveToStorage();
+
+    fetch('/api/my-script-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId, versionId, outcome, myReview, finalFeedback }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+  }
+
+  // 3. Submit My Video Review
+  public submitMyVideoReview(
+    contentId: string,
+    versionId: string,
+    outcome: 'Approve' | 'Request Revision',
+    myReview: string,
+    finalFeedback?: string
+  ) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    const videoVer = this.videoVersions.find((v) => v.id === versionId);
+
+    if (myReview) {
+      this.reviews.push({
+        id: `rev-${Date.now()}-me`,
+        contentId,
+        assetType: 'Video',
+        versionId,
+        reviewerType: 'Me',
+        reviewContent: `我的意见：${myReview}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    if (outcome === 'Approve') {
+      if (videoVer) videoVer.status = 'Approved';
+      content.status = 'Video Approved';
+      content.currentOwner = 'None';
+
+      this.addTimelineEvent({
+        contentId,
+        title: '视频审核通过 (Video Approved)',
+        description: `最终确认通过 Video V${videoVer?.versionNumber || ''}！可进行后期发布排期`,
+        actor: 'Me',
+        type: 'approved',
+      });
+    } else {
+      if (videoVer) videoVer.status = 'Revision Requested';
+      content.status = 'Waiting for KOL Revision';
+      content.currentOwner = 'KOL';
+
+      if (finalFeedback) {
+        this.reviews.push({
+          id: `rev-${Date.now()}-final`,
+          contentId,
+          assetType: 'Video',
+          versionId,
+          reviewerType: 'Final Feedback',
+          reviewContent: `最终修改意见：${finalFeedback}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      this.addTimelineEvent({
+        contentId,
+        title: '视频要求修改 (Request Revision)',
+        description: `要求达人对 Video V${videoVer?.versionNumber || ''} 进行重新剪辑/修改`,
+        actor: 'Me',
+        type: 'revision_req',
+      });
+    }
+
+    content.updatedAt = new Date().toISOString();
+    this.saveToStorage();
+
+    fetch('/api/my-video-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId, versionId, outcome, myReview, finalFeedback }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+  }
+
+  // 4. Add New Script Version
+  public addNewScriptVersion(contentId: string, title: string, scriptText: string, fileUrl?: string): ScriptVersion {
+    const content = this.getContentById(contentId);
+    const existingVersions = this.getScriptVersions(contentId);
+    const nextVerNum = existingVersions.length > 0 ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1 : 1;
+
+    const newVer: ScriptVersion = {
+      id: `sv-${Date.now()}`,
+      contentId,
+      versionNumber: nextVerNum,
+      title: title || `Script V${nextVerNum}`,
+      scriptText,
+      fileUrl,
+      submittedAt: new Date().toISOString(),
+      status: 'Submitted',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.scriptVersions.push(newVer);
+
+    if (content) {
+      content.stage = 'Script';
+      content.status = 'Waiting for Agency Review';
+      content.currentOwner = 'Agency';
+      content.updatedAt = new Date().toISOString();
+
+      this.addTimelineEvent({
+        contentId,
+        title: `提交 Script V${nextVerNum}`,
+        description: `达人提交了新版本脚本 Script V${nextVerNum}，进入省广初审流程`,
+        actor: 'KOL',
+        type: 'script_sub',
+      });
+    }
+
+    this.saveToStorage();
+
+    fetch('/api/script-versions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId, title, scriptText, fileUrl }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+
+    return newVer;
+  }
+
+  // 5. Add New Video Version
+  public addNewVideoVersion(contentId: string, videoUrl: string, fileUrl?: string): VideoVersion {
+    const content = this.getContentById(contentId);
+    const existingVersions = this.getVideoVersions(contentId);
+    const nextVerNum = existingVersions.length > 0 ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1 : 1;
+
+    const newVer: VideoVersion = {
+      id: `vv-${Date.now()}`,
+      contentId,
+      versionNumber: nextVerNum,
+      videoUrl,
+      fileUrl,
+      submittedAt: new Date().toISOString(),
+      status: 'Submitted',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.videoVersions.push(newVer);
+
+    if (content) {
+      content.stage = 'Video';
+      content.status = 'Waiting for Agency Review';
+      content.currentOwner = 'Agency';
+      content.updatedAt = new Date().toISOString();
+
+      this.addTimelineEvent({
+        contentId,
+        title: `提交 Video V${nextVerNum}`,
+        description: `达人提交了新版视频 Video V${nextVerNum}，进入省广初审流程`,
+        actor: 'KOL',
+        type: 'video_sub',
+      });
+    }
+
+    this.saveToStorage();
+
+    fetch('/api/video-versions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId, videoUrl, fileUrl }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+
+    return newVer;
+  }
+
+  // 6. Mark Content Completed
+  public markContentCompleted(contentId: string) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    content.stage = 'Completed';
+    content.status = 'Completed';
+    content.currentOwner = 'None';
+    content.updatedAt = new Date().toISOString();
+
+    this.addTimelineEvent({
+      contentId,
+      title: '任务标记为已完成',
+      description: '内容已成功审核通过并归档',
+      actor: 'Me',
+      type: 'completed',
+    });
+
+    this.saveToStorage();
+
+    fetch('/api/complete-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+  }
+
+  // 7. Update Brief / Info
+  public updateContentBrief(contentId: string, briefText: string, briefUrl: string, notes: string) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    content.briefText = briefText;
+    content.briefUrl = briefUrl;
+    content.notes = notes;
+    content.updatedAt = new Date().toISOString();
+
+    this.saveToStorage();
+
+    fetch('/api/update-brief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId, briefText, briefUrl, notes }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+  }
+
+  // 8. Update Performance Data
+  public updatePerformanceData(contentId: string, perfData: PerformanceData) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    content.performanceData = perfData;
+    content.updatedAt = new Date().toISOString();
+
+    this.addTimelineEvent({
+      contentId,
+      title: '更新发布后数据',
+      description: '手动填写/更新了发布后的阅读量、点赞与互动等数据',
+      actor: this.currentRole,
+      type: 'completed',
+    });
+
+    this.saveToStorage();
+
+    fetch('/api/performance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId, performanceData: perfData, actor: this.currentRole }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+  }
+
+  // 9. Auth & User Role Methods
+  public getCurrentRole(): UserRole {
+    return this.currentRole;
+  }
+
+  public setCurrentRole(role: UserRole) {
+    this.currentRole = role;
+    try {
+      localStorage.setItem(STORAGE_KEYS.USER_ROLE, JSON.stringify(role));
+    } catch (e) {
+      console.error(e);
+    }
+    this.notifyListeners();
+  }
+
+  // 10. AI Multilingual Subtitle & Brief Audit API Call
+  public async auditBriefWithAi(params: {
+    contentTitle: string;
+    campaignName?: string;
+    campaignBrief?: string;
+    contentBrief?: string;
+    subtitlesText: string;
+    language?: string;
+    assetType?: AssetType;
+  }) {
+    const res = await fetch('/api/ai/audit-brief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      throw new Error(`AI Audit API failed with status ${res.status}`);
+    }
+    return res.json();
+  }
+
+  // 11. Reset Data to initial mock
+  public resetData() {
+    Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+    this.resetToDemoData();
+  }
+}
+
+export const dataService = new DataService();

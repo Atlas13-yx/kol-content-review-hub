@@ -1,0 +1,6 @@
+{
+  "name": "KOL Content Review Hub",
+  "description": "KOL 达人内容审核管理系统 - 统一管理 KOL 内容审核流程、阶段、状态、责任方、历史版本与多轮意见",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
