@@ -4,6 +4,7 @@ export type UserRole = 'Me' | 'Agency';
 
 export interface UserAccount {
   id: string;
+  username: string;
   name: string;
   role: UserRole;
   agencyName?: string;
@@ -29,6 +30,8 @@ export type Status =
   // Video
   | 'Waiting for KOL Video'
   | 'Video Approved'
+  | 'Pending Publish Link'
+  | 'Pending Data Entry'
   // Completed
   | 'Completed';
 
@@ -92,6 +95,10 @@ export interface ContentItem {
   briefText: string;
   briefUrl: string;
   notes: string;
+  videoApprovedAt?: string; // 广汽国际同意视频发布时间
+  linkUploadDeadline?: string; // 1天内提醒省广上传发布链接截止时间
+  linkUploadedAt?: string; // 省广实际上传发布链接时间
+  dataReminderDate?: string; // 3天后提醒广汽国际手动补充数据时间
   performanceData?: PerformanceData; // 手动录入的发布后数据
   createdAt: string;
   updatedAt: string;
@@ -152,6 +159,8 @@ export const STATUS_LABELS: Record<Status, string> = {
   'Script Approved': '脚本已通过',
   'Waiting for KOL Video': '等待达人视频',
   'Video Approved': '视频已通过',
+  'Pending Publish Link': '待省广上传链接(1天内)',
+  'Pending Data Entry': '待广汽补充数据(3天后)',
   'Completed': '已完成',
 };
 

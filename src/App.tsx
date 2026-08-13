@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from './services/dataService';
-import { UserRole } from './types';
+import { UserRole, UserAccount } from './types';
 import { DashboardPage } from './pages/DashboardPage';
 import { MyReviewsPage } from './pages/MyReviewsPage';
 import { ContentsPage } from './pages/ContentsPage';
@@ -13,6 +13,7 @@ import { NewContentModal } from './components/NewContentModal';
 import { NewCampaignModal } from './components/NewCampaignModal';
 import { NewKolModal } from './components/NewKolModal';
 import { LoginModal } from './components/LoginModal';
+import { LoginPage } from './components/LoginPage';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -26,6 +27,7 @@ import {
   UserCheck,
   Building2,
   Shield,
+  LogOut,
   ChevronRight
 } from 'lucide-react';
 
@@ -34,6 +36,7 @@ export default function App() {
   const [routeParams, setRouteParams] = useState<{ id?: string }>({});
   const [myReviewsCount, setMyReviewsCount] = useState<number>(0);
   const [currentRole, setCurrentRole] = useState<UserRole>(dataService.getCurrentRole());
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(dataService.getCurrentUser());
 
   // Modals state
   const [showNewContentModal, setShowNewContentModal] = useState(false);
@@ -44,6 +47,7 @@ export default function App() {
   useEffect(() => {
     const update = () => {
       setCurrentRole(dataService.getCurrentRole());
+      setCurrentUser(dataService.getCurrentUser());
       const contents = dataService.getContents();
       const meCount = contents.filter((c) => c.currentOwner === 'Me').length;
       setMyReviewsCount(meCount);
@@ -162,23 +166,30 @@ export default function App() {
 
             {/* Right Action Tools & User Role Login Button */}
             <div className="flex items-center gap-2">
-              {/* Role Switcher / Login Status Button */}
+              {/* Logged in User Profile Badge / Switch Button */}
               <button
                 onClick={() => setShowLoginModal(true)}
                 className={`px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-2 transition-all ${
                   currentRole === 'Me'
-                    ? 'bg-indigo-950/80 border-indigo-500/50 text-indigo-300 hover:border-indigo-400'
-                    : 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
+                    ? 'bg-indigo-950/90 border-indigo-500/60 text-indigo-200 hover:border-indigo-400'
+                    : 'bg-emerald-950/90 border-emerald-500/60 text-emerald-200 hover:border-emerald-400'
                 }`}
-                title="点击切换登录角色/身份"
+                title="点击切换账号登录或查看鉴权身份"
               >
                 {currentRole === 'Me' ? (
                   <Shield className="w-3.5 h-3.5 text-indigo-400" />
                 ) : (
                   <Building2 className="w-3.5 h-3.5 text-emerald-400" />
                 )}
-                <span>{currentRole === 'Me' ? '广汽国际 (Me)' : '省广代理商 (Agency)'}</span>
-                <span className="text-[10px] px-1 rounded bg-white/10 text-slate-300">切换</span>
+                <span>
+                  {currentRole === 'Me' ? '广汽国际' : '省广代理商'}
+                  <span className="ml-1 opacity-75 font-mono text-[10px]">
+                    ({currentUser?.username || (currentRole === 'Me' ? 'gac_admin' : 'agency_user')})
+                  </span>
+                </span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10 text-slate-300 font-normal hover:bg-white/20">
+                  切换账号
+                </span>
               </button>
 
               <button

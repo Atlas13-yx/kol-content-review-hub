@@ -10,6 +10,7 @@ import { MyReviewModal } from '../components/MyReviewModal';
 import { NewScriptVersionModal } from '../components/NewScriptVersionModal';
 import { NewVideoVersionModal } from '../components/NewVideoVersionModal';
 import { PerformanceModal } from '../components/PerformanceModal';
+import { UploadPublishLinkModal } from '../components/UploadPublishLinkModal';
 import { AiSubtitleAuditModal } from '../components/AiSubtitleAuditModal';
 import { isOverdue } from '../utils/dateUtils';
 import {
@@ -65,6 +66,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
   const [showNewScriptModal, setShowNewScriptModal] = useState(false);
   const [showNewVideoModal, setShowNewVideoModal] = useState(false);
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
+  const [showUploadLinkModal, setShowUploadLinkModal] = useState(false);
   const [showAiAuditModal, setShowAiAuditModal] = useState(false);
   const [aiAuditAssetType, setAiAuditAssetType] = useState<AssetType>('Video');
   const [aiAuditVersionNum, setAiAuditVersionNum] = useState<number>(1);
@@ -210,6 +212,82 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
             {currentRole === 'Agency' ? '上传省广初审' : '广汽国际裁决'}
           </span>
         </div>
+
+        {/* Publish Link & Data Entry Reminder Banner */}
+        {(content.status === 'Pending Publish Link' || content.status === 'Pending Data Entry' || content.videoApprovedAt) && (
+          <div className="space-y-3 pt-1">
+            {/* 1. Agency Reminder Banner */}
+            {content.status === 'Pending Publish Link' && (
+              <div className="p-4 rounded-xl bg-gradient-to-r from-purple-900 to-indigo-900 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 border border-purple-500/30">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-purple-500/20 border border-purple-400/30 text-purple-300 shrink-0 mt-0.5">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="font-bold text-sm text-purple-100 flex items-center gap-2">
+                      <span>🚨 【省广任务提醒】广汽国际已同意视频发布，请于 1 天内上传线上链接</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/40 text-purple-200 border border-purple-400/30 font-mono">
+                        限时 24 小时
+                      </span>
+                    </div>
+                    <p className="text-xs text-purple-200/90 leading-relaxed">
+                      广汽国际于 {content.videoApprovedAt ? new Date(content.videoApprovedAt).toLocaleString('zh-CN') : '近期'} 批准该视频公开发布。请省广团队于{' '}
+                      <strong className="text-white font-mono bg-purple-950/80 px-1.5 py-0.5 rounded border border-purple-400/40">
+                        {content.linkUploadDeadline ? new Date(content.linkUploadDeadline).toLocaleString('zh-CN') : '1天内'}
+                      </strong>{' '}
+                      前在小红书/抖音等平台上线，并在此提交公开视频链接。
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowUploadLinkModal(true)}
+                  className="px-4 py-2.5 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-xl shadow-lg transition-all shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>上传线上发布链接</span>
+                </button>
+              </div>
+            )}
+
+            {/* 2. GAC International (Me) 3-Day Data Reminder Banner */}
+            {(content.videoApprovedAt || content.status === 'Pending Data Entry') && (
+              <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 border border-cyan-500/30">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-cyan-500/20 border border-cyan-400/30 text-cyan-300 shrink-0 mt-0.5">
+                    <BarChart2 className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="font-bold text-sm text-cyan-100 flex items-center gap-2">
+                      <span>📊 【广汽数据提醒】视频发布 3 天后手动补充表现数据</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-500/30 text-cyan-200 border border-cyan-400/30 font-mono">
+                        3天后数据归档
+                      </span>
+                    </div>
+                    <p className="text-xs text-cyan-200/90 leading-relaxed">
+                      系统预置提醒：广汽团队已设置在视频发布 3 天后（提醒触发日期：
+                      <strong className="text-white font-mono bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-400/40">
+                        {content.dataReminderDate ? new Date(content.dataReminderDate).toLocaleDateString('zh-CN') : '3天后'}
+                      </strong>
+                      ）手动补充该视频的播放量、点赞量、评论与分享互动数。
+                      {content.performanceData?.publishUrl && (
+                        <span className="ml-1 text-emerald-300">
+                          (省广已提交上线链接：<a href={content.performanceData.publishUrl} target="_blank" rel="noreferrer" className="underline font-mono">{content.performanceData.publishUrl}</a>)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPerformanceModal(true)}
+                  className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <BarChart2 className="w-4 h-4" />
+                  <span>手动补充表现数据</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Title & Topic */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -436,13 +514,15 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
               <span>AI 脚本与 Brief 智能初审插件</span>
             </button>
 
-            <button
-              onClick={() => setShowNewScriptModal(true)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>添加新脚本版本</span>
-            </button>
+            {currentRole === 'Agency' && (
+              <button
+                onClick={() => setShowNewScriptModal(true)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>添加新脚本版本 (省广提交)</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -592,13 +672,15 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
               <span>AI 多语种字幕识别与 Brief 初审插件</span>
             </button>
 
-            <button
-              onClick={() => setShowNewVideoModal(true)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>添加新视频版本</span>
-            </button>
+            {currentRole === 'Agency' && (
+              <button
+                onClick={() => setShowNewVideoModal(true)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>添加新视频版本 (省广提交)</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -824,6 +906,13 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
         isOpen={showPerformanceModal}
         content={content}
         onClose={() => setShowPerformanceModal(false)}
+        onSuccess={reloadData}
+      />
+
+      <UploadPublishLinkModal
+        isOpen={showUploadLinkModal}
+        content={content}
+        onClose={() => setShowUploadLinkModal(false)}
         onSuccess={reloadData}
       />
       <AgencyReviewModal

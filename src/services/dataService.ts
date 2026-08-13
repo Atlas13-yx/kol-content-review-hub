@@ -9,6 +9,7 @@ import {
   AssetType,
   UserRole,
   PerformanceData,
+  UserAccount,
 } from '../types';
 import {
   INITIAL_CAMPAIGNS,
@@ -29,6 +30,24 @@ const STORAGE_KEYS = {
   REVIEWS: 'kol_hub_reviews_v1',
   TIMELINES: 'kol_hub_timelines_v1',
   USER_ROLE: 'kol_hub_user_role_v1',
+  USER_ACCOUNT: 'kol_hub_user_account_v1',
+};
+
+const DEFAULT_ACCOUNTS: Record<UserRole, UserAccount> = {
+  Me: {
+    id: 'acc-gac',
+    username: 'gac_admin',
+    name: '广汽国际审核团队',
+    role: 'Me',
+    agencyName: '广汽国际 GAC International',
+  },
+  Agency: {
+    id: 'acc-agency',
+    username: 'agency_user',
+    name: '省广代理商项目组',
+    role: 'Agency',
+    agencyName: '省广营销集团 GIMC',
+  },
 };
 
 class DataService {
@@ -40,6 +59,7 @@ class DataService {
   private reviews: Review[];
   private timelines: TimelineEvent[];
   private currentRole: UserRole;
+  private currentUser: UserAccount | null;
   private lastServerTimestamp: string = '';
   private listeners: Set<() => void> = new Set();
   private pollTimer: any = null;
@@ -53,6 +73,10 @@ class DataService {
     this.reviews = this.loadFromStorage(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
     this.timelines = this.loadFromStorage(STORAGE_KEYS.TIMELINES, INITIAL_TIMELINES);
     this.currentRole = this.loadFromStorage(STORAGE_KEYS.USER_ROLE, 'Me');
+    this.currentUser = this.loadFromStorage(
+      STORAGE_KEYS.USER_ACCOUNT,
+      DEFAULT_ACCOUNTS[this.currentRole]
+    );
 
     // Initial sync from Express backend & start polling
     this.fetchServerData();
@@ -500,13 +524,23 @@ class DataService {
 
     if (outcome === 'Approve') {
       if (videoVer) videoVer.status = 'Approved';
-      content.status = 'Video Approved';
-      content.currentOwner = 'None';
+      const now = new Date();
+      const oneDayLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+      content.status = 'Pending Publish Link';
+      content.currentOwner = 'Agency'; // 移交给省广：1天内必须上传链接
+      content.videoApprovedAt = now.toISOString();
+      content.linkUploadDeadline = oneDayLater.toISOString();
+      content.dataReminderDate = threeDaysLater.toISOString();
+
+      const deadlineTimeStr = `${oneDayLater.getMonth() + 1}月${oneDayLater.getDate()}日 ${oneDayLater.getHours().toString().padStart(2, '0')}:${oneDayLater.getMinutes().toString().padStart(2, '0')}`;
+      const reminderTimeStr = `${threeDaysLater.getMonth() + 1}月${threeDaysLater.getDate()}日`;
 
       this.addTimelineEvent({
         contentId,
-        title: '视频审核通过 (Video Approved)',
-        description: `最终确认通过 Video V${videoVer?.versionNumber || ''}！可进行后期发布排期`,
+        title: '广汽国际同意视频发布 (Video Approved)',
+        description: `广汽国际终审通过 Video V${videoVer?.versionNumber || ''}！系统触发规则：1. 提醒省广于 1 天内（截至 ${deadlineTimeStr}）上传发布链接；2. 系统将在 3 天后（${reminderTimeStr}）提醒广汽国际手动补充表现数据。`,
         actor: 'Me',
         type: 'approved',
       });
@@ -694,18 +728,62 @@ class DataService {
       .catch(() => {});
   }
 
-  // 8. Update Performance Data
+  // 8. Update Publish URL (省广1天内上传链接)
+  public updatePublishUrl(contentId: string, publishUrl: string, publishedAt?: string) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    content.linkUploadedAt = new Date().toISOString();
+    content.status = 'Pending Data Entry';
+    content.currentOwner = 'Me'; // 移交给广汽国际，等待3天后补充数据
+
+    if (!content.performanceData) {
+      content.performanceData = {};
+    }
+    content.performanceData.publishUrl = publishUrl;
+    content.performanceData.publishedAt = publishedAt || new Date().toISOString().split('T')[0];
+
+    content.updatedAt = new Date().toISOString();
+
+    const dataRemDate = content.dataReminderDate
+      ? new Date(content.dataReminderDate)
+      : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const remStr = `${dataRemDate.getMonth() + 1}月${dataRemDate.getDate()}日`;
+
+    this.addTimelineEvent({
+      contentId,
+      title: '省广已上传视频上线链接',
+      description: `省广按时提交了视频线上发布链接：${publishUrl}。已移交广汽国际，系统将于 3 天后（${remStr}）提醒广汽国际团队手动补充数据。`,
+      actor: 'Agency',
+      type: 'agency_rev',
+    });
+
+    this.saveToStorage();
+
+    fetch(`/api/contents/${contentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(content),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+  }
+
+  // 9. Update Performance Data
   public updatePerformanceData(contentId: string, perfData: PerformanceData) {
     const content = this.getContentById(contentId);
     if (!content) return;
 
     content.performanceData = perfData;
+    content.stage = 'Completed';
+    content.status = 'Completed';
+    content.currentOwner = 'None';
     content.updatedAt = new Date().toISOString();
 
     this.addTimelineEvent({
       contentId,
-      title: '更新发布后数据',
-      description: '手动填写/更新了发布后的阅读量、点赞与互动等数据',
+      title: '广汽国际完成发布后数据补充',
+      description: '手动填写/更新了发布后的播放量、点赞、评论与分享数据，任务全流程归档完成。',
       actor: this.currentRole,
       type: 'completed',
     });
@@ -726,10 +804,56 @@ class DataService {
     return this.currentRole;
   }
 
+  public getCurrentUser(): UserAccount | null {
+    if (!this.currentUser) {
+      this.currentUser = DEFAULT_ACCOUNTS[this.currentRole];
+    }
+    return this.currentUser;
+  }
+
+  public async loginWithCredentials(username: string, password: string): Promise<UserAccount> {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || '登录失败，请检查账号和密码！');
+    }
+
+    const user: UserAccount = data.user;
+    this.currentUser = user;
+    this.currentRole = user.role;
+
+    try {
+      localStorage.setItem(STORAGE_KEYS.USER_ROLE, JSON.stringify(user.role));
+      localStorage.setItem(STORAGE_KEYS.USER_ACCOUNT, JSON.stringify(user));
+    } catch (e) {
+      console.error(e);
+    }
+
+    this.notifyListeners();
+    return user;
+  }
+
   public setCurrentRole(role: UserRole) {
     this.currentRole = role;
+    this.currentUser = DEFAULT_ACCOUNTS[role];
     try {
       localStorage.setItem(STORAGE_KEYS.USER_ROLE, JSON.stringify(role));
+      localStorage.setItem(STORAGE_KEYS.USER_ACCOUNT, JSON.stringify(this.currentUser));
+    } catch (e) {
+      console.error(e);
+    }
+    this.notifyListeners();
+  }
+
+  public logout() {
+    this.currentUser = null;
+    try {
+      localStorage.removeItem(STORAGE_KEYS.USER_ACCOUNT);
     } catch (e) {
       console.error(e);
     }

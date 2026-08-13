@@ -33,9 +33,11 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
   const getCampaignName = (id: string) => campaigns.find((c) => c.id === id)?.name || id;
   const getKolName = (id: string) => kols.find((k) => k.id === id)?.name || id;
 
-  // Filter ONLY currentOwner === 'Me'
+  const currentRole = dataService.getCurrentRole();
+
+  // Filter ONLY currentOwner matching logged in role
   const myReviews = contents.filter((c) => {
-    if (c.currentOwner !== 'Me') return false;
+    if (c.currentOwner !== currentRole) return false;
 
     // Search filter
     if (search.trim()) {
@@ -93,13 +95,19 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900">待我审核 (My Reviews)</h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-600 text-white">
+            <h1 className="text-xl font-bold text-slate-900">
+              {currentRole === 'Me' ? '待广汽国际审核 (GAC Reviews)' : '待省广初审 (Agency Reviews)'}
+            </h1>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-xs font-bold text-white ${
+                currentRole === 'Me' ? 'bg-indigo-600' : 'bg-emerald-600'
+              }`}
+            >
               {myReviews.length} 项需处理
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            只列出责任方为“广汽国际”的稿件，按紧急度和等待时长排序，优先解决临近/已逾期任务。
+            只列出当前责任归属于【{currentRole === 'Me' ? '广汽国际' : '省广代理商'}】的稿件任务，按紧急度与等待时长自动排序。
           </p>
         </div>
 
@@ -273,9 +281,19 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
                             e.stopPropagation();
                             onNavigate('content-detail', { id: item.id });
                           }}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm transition-colors"
+                          className={`px-3 py-1.5 rounded-lg text-white font-semibold text-xs shadow-sm transition-colors ${
+                            item.status === 'Pending Publish Link'
+                              ? 'bg-purple-600 hover:bg-purple-700'
+                              : item.status === 'Pending Data Entry'
+                              ? 'bg-cyan-600 hover:bg-cyan-700'
+                              : 'bg-indigo-600 hover:bg-indigo-700'
+                          }`}
                         >
-                          Review 审核
+                          {item.status === 'Pending Publish Link'
+                            ? '上传发布链接'
+                            : item.status === 'Pending Data Entry'
+                            ? '补充表现数据'
+                            : 'Review 审核'}
                         </button>
                       </td>
                     </tr>

@@ -132,6 +132,61 @@ async function startServer() {
     res.json({ status: 'ok', updatedAt: db.updatedAt, geminiConfigured: !!aiClient });
   });
 
+  // Pre-configured Accounts for Login
+  const AUTH_ACCOUNTS = [
+    {
+      id: 'acc-gac',
+      username: 'gac_admin',
+      password: 'gac2026',
+      role: 'Me',
+      name: '广汽国际审核团队',
+      agencyName: '广汽国际 GAC International',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+    },
+    {
+      id: 'acc-agency',
+      username: 'agency_user',
+      password: 'agency2026',
+      role: 'Agency',
+      name: '省广代理商项目组',
+      agencyName: '省广营销集团 GIMC',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+    },
+  ];
+
+  // LOGIN Endpoint
+  app.post('/api/auth/login', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: '请填写账号和密码' });
+    }
+
+    const matchedAccount = AUTH_ACCOUNTS.find(
+      (acc) => acc.username.trim().toLowerCase() === username.trim().toLowerCase() && acc.password === password
+    );
+
+    if (!matchedAccount) {
+      return res.status(401).json({
+        success: false,
+        message: '账号或密码错误！广汽国际提示：请选择列表给出的账号或核对输入。',
+      });
+    }
+
+    const token = `token-${matchedAccount.username}-${Date.now()}`;
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: matchedAccount.id,
+        username: matchedAccount.username,
+        name: matchedAccount.name,
+        role: matchedAccount.role,
+        agencyName: matchedAccount.agencyName,
+        avatar: matchedAccount.avatar,
+      },
+    });
+  });
+
   // AI Multilingual Subtitle & Brief Audit API Endpoint
   app.post('/api/ai/audit-brief', async (req, res) => {
     try {

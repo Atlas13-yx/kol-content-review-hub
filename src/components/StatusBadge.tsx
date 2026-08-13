@@ -24,6 +24,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
     case 'Waiting for KOL Revision':
       colorClasses = 'bg-sky-50 text-sky-800 border border-sky-200/80 font-medium';
       break;
+    case 'Pending Publish Link':
+      colorClasses = 'bg-purple-100 text-purple-900 border border-purple-300 font-bold animate-pulse';
+      break;
+    case 'Pending Data Entry':
+      colorClasses = 'bg-cyan-100 text-cyan-900 border border-cyan-300 font-bold';
+      break;
     case 'Script Approved':
     case 'Video Approved':
     case 'Completed':
