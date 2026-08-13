@@ -57,6 +57,8 @@ npm run clean    # 清理构建目录
 
 当前服务端使用 `data/db.json` 保存原型数据；浏览器端同时使用 localStorage 做快速交互与离线回退。生产化前应迁移到正式数据库并增加真实身份认证、权限校验、审计日志和备份策略。
 
+公开演示站点目前使用浏览器本地存储，因此不同访问者之间不会共享修改后的数据，Gemini 智能审核也不会在公开演示环境中调用密钥。
+
 系统中的 `gac_admin`、`agency_user` 及对应密码仅是公开演示数据，不应直接用于生产环境。
 
 ## Codex 协作
@@ -66,4 +68,3 @@ npm run clean    # 清理构建目录
 ## 来源
 
 原始 AI Studio 项目：<https://aistudio.google.com/apps/931905a7-4bd5-4744-abe1-68db44538e91>
-
