@@ -10,6 +10,16 @@ import {
   UserRole,
   PerformanceData,
   UserAccount,
+  Platform,
+  Stage,
+  Status,
+  CurrentOwner,
+  STAGE_LABELS,
+  STATUS_LABELS,
+  KolSelectionBatch,
+  KolSelectionBatchStatus,
+  SystemNotification,
+  NotificationType,
 } from '../types';
 import {
   INITIAL_CAMPAIGNS,
@@ -19,6 +29,8 @@ import {
   INITIAL_VIDEO_VERSIONS,
   INITIAL_REVIEWS,
   INITIAL_TIMELINES,
+  INITIAL_KOL_SELECTION_BATCHES,
+  INITIAL_NOTIFICATIONS,
 } from '../data/mockData';
 
 const STORAGE_KEYS = {
@@ -29,8 +41,11 @@ const STORAGE_KEYS = {
   VIDEO_VERSIONS: 'kol_hub_videos_v1',
   REVIEWS: 'kol_hub_reviews_v1',
   TIMELINES: 'kol_hub_timelines_v1',
+  KOL_SELECTION_BATCHES: 'kol_hub_kol_selection_batches_v1',
+  NOTIFICATIONS: 'kol_hub_notifications_v1',
   USER_ROLE: 'kol_hub_user_role_v1',
   USER_ACCOUNT: 'kol_hub_user_account_v1',
+  IS_LOGGED_IN: 'kol_hub_is_logged_in_v1',
 };
 
 const DEFAULT_ACCOUNTS: Record<UserRole, UserAccount> = {
@@ -58,8 +73,11 @@ class DataService {
   private videoVersions: VideoVersion[];
   private reviews: Review[];
   private timelines: TimelineEvent[];
+  private kolSelectionBatches: KolSelectionBatch[];
+  private notifications: SystemNotification[];
   private currentRole: UserRole;
   private currentUser: UserAccount | null;
+  private isLoggedInState: boolean;
   private lastServerTimestamp: string = '';
   private listeners: Set<() => void> = new Set();
   private pollTimer: any = null;
@@ -72,11 +90,18 @@ class DataService {
     this.videoVersions = this.loadFromStorage(STORAGE_KEYS.VIDEO_VERSIONS, INITIAL_VIDEO_VERSIONS);
     this.reviews = this.loadFromStorage(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
     this.timelines = this.loadFromStorage(STORAGE_KEYS.TIMELINES, INITIAL_TIMELINES);
+    this.kolSelectionBatches = this.loadFromStorage(STORAGE_KEYS.KOL_SELECTION_BATCHES, INITIAL_KOL_SELECTION_BATCHES);
+    this.notifications = this.loadFromStorage(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
     this.currentRole = this.loadFromStorage(STORAGE_KEYS.USER_ROLE, 'Me');
+    this.isLoggedInState = this.loadFromStorage(STORAGE_KEYS.IS_LOGGED_IN, false);
     this.currentUser = this.loadFromStorage(
       STORAGE_KEYS.USER_ACCOUNT,
-      DEFAULT_ACCOUNTS[this.currentRole]
+      this.isLoggedInState ? DEFAULT_ACCOUNTS[this.currentRole] : null
     );
+
+    // Run campaign deadline and publish/data reminder checks on startup
+    this.checkCampaignDeadlines();
+    this.checkPublishAndDataReminders();
 
     // Initial sync from Express backend & start polling
     this.fetchServerData();
@@ -101,6 +126,8 @@ class DataService {
       localStorage.setItem(STORAGE_KEYS.VIDEO_VERSIONS, JSON.stringify(this.videoVersions));
       localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(this.reviews));
       localStorage.setItem(STORAGE_KEYS.TIMELINES, JSON.stringify(this.timelines));
+      localStorage.setItem(STORAGE_KEYS.KOL_SELECTION_BATCHES, JSON.stringify(this.kolSelectionBatches));
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(this.notifications));
       this.notifyListeners();
     } catch (e) {
       console.error('Failed to save to localStorage', e);
@@ -134,6 +161,12 @@ class DataService {
           this.videoVersions = data.videoVersions || [];
           this.reviews = data.reviews || [];
           this.timelines = data.timelines || [];
+          this.kolSelectionBatches = data.kolSelectionBatches || [];
+          if (data.notifications && data.notifications.length > 0) {
+            this.notifications = data.notifications;
+          }
+          this.checkCampaignDeadlines();
+          this.checkPublishAndDataReminders();
           this.saveToStorage();
         }
       }
@@ -161,6 +194,9 @@ class DataService {
           this.videoVersions = data.data.videoVersions;
           this.reviews = data.data.reviews;
           this.timelines = data.data.timelines;
+          this.kolSelectionBatches = data.data.kolSelectionBatches || [...INITIAL_KOL_SELECTION_BATCHES];
+          this.notifications = data.data.notifications || [...INITIAL_NOTIFICATIONS];
+          this.checkCampaignDeadlines();
           this.saveToStorage();
         }
       })
@@ -172,6 +208,9 @@ class DataService {
         this.videoVersions = [...INITIAL_VIDEO_VERSIONS];
         this.reviews = [...INITIAL_REVIEWS];
         this.timelines = [...INITIAL_TIMELINES];
+        this.kolSelectionBatches = [...INITIAL_KOL_SELECTION_BATCHES];
+        this.notifications = [...INITIAL_NOTIFICATIONS];
+        this.checkCampaignDeadlines();
         this.saveToStorage();
       });
   }
@@ -183,6 +222,31 @@ class DataService {
 
   public getCampaignById(id: string): Campaign | undefined {
     return this.campaigns.find((c) => c.id === id);
+  }
+
+  public getCampaignMaterials(campaignId?: string): string[] {
+    if (campaignId) {
+      const camp = this.getCampaignById(campaignId);
+      if (camp && Array.isArray(camp.availableMaterials) && camp.availableMaterials.length > 0) {
+        return camp.availableMaterials;
+      }
+    }
+    // Fallback standard material list for generic campaign
+    return [
+      '官方 4K B-Roll 实拍素材包',
+      '官方 KV 海报与多语种设计源文件',
+      '车型卖点与技术参数手册',
+      '智能座舱与智驾演示片段',
+      '品牌高光宣传切片',
+    ];
+  }
+
+  public canEditCampaign(): boolean {
+    return this.currentRole === 'Me';
+  }
+
+  public canCreateCampaign(): boolean {
+    return true; // Both Me and Agency can create campaigns
   }
 
   public addCampaign(camp: Omit<Campaign, 'id' | 'createdAt' | 'updatedAt'>): Campaign {
@@ -198,7 +262,7 @@ class DataService {
     fetch('/api/campaigns', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(camp),
+      body: JSON.stringify({ ...camp, createdBy: this.currentRole }),
     })
       .then(() => this.fetchServerData())
       .catch(() => {});
@@ -207,6 +271,11 @@ class DataService {
   }
 
   public updateCampaign(camp: Campaign) {
+    if (!this.canEditCampaign()) {
+      alert('【权限拦截】Campaign 后期调整与排期修改权限仅开放给广汽国际 (Me)，省广仅支持新建与查看！');
+      return;
+    }
+
     const index = this.campaigns.findIndex((c) => c.id === camp.id);
     if (index !== -1) {
       this.campaigns[index] = { ...camp, updatedAt: new Date().toISOString() };
@@ -215,11 +284,432 @@ class DataService {
       fetch(`/api/campaigns/${camp.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(camp),
+        body: JSON.stringify({ ...camp, actor: this.currentRole }),
       })
         .then(() => this.fetchServerData())
         .catch(() => {});
     }
+  }
+
+  // --- Notification Methods ---
+  public getNotifications(role?: UserRole, includeDismissed: boolean = true): SystemNotification[] {
+    const activeRole = role || this.currentRole;
+    return this.notifications.filter((n) => {
+      const matchRole = n.recipientRole === activeRole || n.recipientRole === 'All';
+      if (!matchRole) return false;
+      if (!includeDismissed && n.dismissed) return false;
+      return true;
+    });
+  }
+
+  public getNotificationsForRole(role?: UserRole): SystemNotification[] {
+    const activeRole = role || this.currentRole;
+    return this.notifications.filter(
+      (n) => n.recipientRole === activeRole || n.recipientRole === 'All'
+    );
+  }
+
+  public getActiveToastNotifications(role?: UserRole): SystemNotification[] {
+    const activeRole = role || this.currentRole;
+    return this.notifications.filter(
+      (n) => !n.dismissed && (n.recipientRole === activeRole || n.recipientRole === 'All')
+    );
+  }
+
+  public getUnreadNotificationsCount(role?: UserRole): number {
+    const activeRole = role || this.currentRole;
+    return this.notifications.filter(
+      (n) => !n.read && (n.recipientRole === activeRole || n.recipientRole === 'All')
+    ).length;
+  }
+
+  public addNotification(notifData: {
+    type: NotificationType;
+    title: string;
+    message: string;
+    recipientRole: 'Me' | 'Agency' | 'All';
+    relatedId?: string;
+    relatedType?: 'campaign' | 'content' | 'kol' | 'brief' | 'script' | 'video' | 'kol_selection';
+    targetPage?: 'campaigns' | 'kols' | 'kol-selection' | 'brief-review' | 'script-review' | 'video-review' | 'contents';
+    targetParams?: Record<string, any>;
+    highlight?: boolean;
+  }): SystemNotification {
+    const newNotif: SystemNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString(),
+      read: false,
+      dismissed: false,
+      ...notifData,
+    };
+
+    this.notifications.unshift(newNotif);
+    this.saveToStorage();
+
+    fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newNotif),
+    }).catch(() => {});
+
+    return newNotif;
+  }
+
+  public dismissNotification(id: string) {
+    const notif = this.notifications.find((n) => n.id === id);
+    if (notif) {
+      notif.dismissed = true;
+      this.saveToStorage();
+
+      fetch(`/api/notifications/${id}/dismiss`, { method: 'PUT' }).catch(() => {});
+    }
+  }
+
+  public dismissAllNotifications(role?: UserRole) {
+    const activeRole = role || this.currentRole;
+    this.notifications.forEach((n) => {
+      if (n.recipientRole === activeRole || n.recipientRole === 'All') {
+        n.dismissed = true;
+      }
+    });
+    this.saveToStorage();
+
+    fetch('/api/notifications/dismiss-all', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: activeRole }),
+    }).catch(() => {});
+  }
+
+  public markNotificationRead(id: string) {
+    const notif = this.notifications.find((n) => n.id === id);
+    if (notif) {
+      notif.read = true;
+      this.saveToStorage();
+
+      fetch(`/api/notifications/${id}/read`, { method: 'PUT' }).catch(() => {});
+    }
+  }
+
+  public markNotificationAsRead(id: string) {
+    this.markNotificationRead(id);
+  }
+
+  public markAllNotificationsRead(role?: UserRole) {
+    const activeRole = role || this.currentRole;
+    this.notifications.forEach((n) => {
+      if (n.recipientRole === activeRole || n.recipientRole === 'All') {
+        n.read = true;
+      }
+    });
+    this.saveToStorage();
+
+    fetch('/api/notifications/read-all', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: activeRole }),
+    }).catch(() => {});
+  }
+
+  public deleteNotification(id: string) {
+    this.notifications = this.notifications.filter((n) => n.id !== id);
+    this.saveToStorage();
+
+    fetch(`/api/notifications/${id}`, { method: 'DELETE' }).catch(() => {});
+  }
+
+  /**
+   * 检查所有 Active Campaign 的结束倒计时（结束前 3 天触发预警提醒双方）
+   */
+  public checkCampaignDeadlines() {
+    const now = new Date();
+    this.campaigns.forEach((camp) => {
+      if (camp.status !== 'Active') return;
+      const endDate = new Date(camp.endDate);
+      if (isNaN(endDate.getTime())) return;
+
+      const diffTime = endDate.getTime() - now.getTime();
+      const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // 结束前 3 天（<= 3 天）设置提醒双方还剩多少未完成
+      if (daysLeft <= 3) {
+        const campContents = this.contents.filter((c) => c.campaignId === camp.id);
+        const uncompletedContents = campContents.filter((c) => c.stage !== 'Completed');
+        const uncompletedCount = uncompletedContents.length;
+
+        const pendingReviews = uncompletedContents.filter(
+          (c) =>
+            c.status.includes('Waiting') ||
+            c.status.includes('Pending') ||
+            c.status.includes('Review') ||
+            c.status.includes('Draft')
+        ).length;
+        const inProgressCount = uncompletedCount - pendingReviews;
+
+        const notifId = `deadline-${camp.id}`;
+        const existing = this.notifications.find(
+          (n) => n.id === notifId || (n.type === 'campaign_deadline' && n.relatedId === camp.id)
+        );
+
+        const title =
+          daysLeft > 0
+            ? `【活动倒计时预警】《${camp.name}》距截止仅剩 ${daysLeft} 天`
+            : `【活动即将截止】《${camp.name}》今日到期`;
+
+        const message = `《${camp.name}》Campaign 截止日期为 ${camp.endDate}。当前仍有 ${uncompletedCount} 个达人任务未完成（其中 ${pendingReviews} 个待审核处理，${inProgressCount} 个处于达人制作中），请双方（广汽国际 & 省广代理商）加紧推进！`;
+
+        if (existing) {
+          existing.title = title;
+          existing.message = message;
+        } else {
+          this.notifications.unshift({
+            id: notifId,
+            type: 'campaign_deadline',
+            title,
+            message,
+            recipientRole: 'All', // 提醒双方
+            relatedId: camp.id,
+            relatedType: 'campaign',
+            targetPage: 'campaigns',
+            targetParams: { id: camp.id },
+            createdAt: new Date().toISOString(),
+            read: false,
+            dismissed: false,
+            highlight: true,
+          });
+        }
+      }
+    });
+  }
+
+  /**
+   * 检查视频发布链接上传（1天内催办省广）以及发布满3天投放效果数据补充（催办省广）
+   * 规则：所有发布链接与投后效果数据均为省广团队负责补充，系统定点提醒省广
+   */
+  public checkPublishAndDataReminders() {
+    this.contents.forEach((c) => {
+      // 1. 待省广上传发布链接 (视频终审通过后1天内)
+      if (
+        c.status === 'Pending Publish Link' ||
+        (c.videoApprovedAt && !c.performanceData?.publishUrl && !c.linkUploadedAt)
+      ) {
+        const notifId = `reminder-publink-${c.id}`;
+        const existing = this.notifications.find((n) => n.id === notifId);
+        const deadlineStr = c.linkUploadDeadline
+          ? new Date(c.linkUploadDeadline).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+          : '1天内';
+
+        const title = `【待上传发布链接】《${c.title}》视频终审已通过`;
+        const message = `广汽国际已终审通过视频，请省广团队于 1 天内（${deadlineStr} 前）督促达人上线发布并录入正式海外视频发布链接。`;
+
+        if (existing) {
+          existing.title = title;
+          existing.message = message;
+        } else {
+          this.notifications.unshift({
+            id: notifId,
+            type: 'reminder_publish',
+            title,
+            message,
+            recipientRole: 'Agency', // 提醒省广
+            relatedId: c.id,
+            relatedType: 'video',
+            targetPage: 'video-review',
+            targetParams: { id: c.id },
+            createdAt: new Date().toISOString(),
+            read: false,
+            dismissed: false,
+            highlight: true,
+          });
+        }
+      }
+
+      // 2. 待省广补充详细数据 (发布上线满3天后)
+      if (
+        c.status === 'Pending Data Entry' ||
+        (c.linkUploadedAt && (!c.performanceData?.views || c.performanceData.views === 0))
+      ) {
+        const notifId = `reminder-dataentry-${c.id}`;
+        const existing = this.notifications.find((n) => n.id === notifId);
+        const title = `【待补充投放数据】《${c.title}》上线已满 3 天`;
+        const message = `视频已在海外平台公开发布满 3 天，请省广团队及时补充录入详细海外效果数据（播放量、3秒完播率、点赞/评论/收藏/转发量及综合互动率）。`;
+
+        if (existing) {
+          existing.title = title;
+          existing.message = message;
+        } else {
+          this.notifications.unshift({
+            id: notifId,
+            type: 'reminder_data',
+            title,
+            message,
+            recipientRole: 'Agency', // 提醒省广
+            relatedId: c.id,
+            relatedType: 'content',
+            targetPage: 'contents',
+            targetParams: { id: c.id },
+            createdAt: new Date().toISOString(),
+            read: false,
+            dismissed: false,
+            highlight: true,
+          });
+        }
+      }
+    });
+  }
+
+  // --- KOL Selection Batch Methods (省广提报 & 广汽国际审核/反馈通道) ---
+  public getKolSelectionBatches(): KolSelectionBatch[] {
+    return [...this.kolSelectionBatches];
+  }
+
+  public getKolSelectionBatchById(id: string): KolSelectionBatch | undefined {
+    return this.kolSelectionBatches.find((b) => b.id === id);
+  }
+
+  public getKolSelectionBatchesByCampaign(campaignId: string): KolSelectionBatch[] {
+    return this.kolSelectionBatches.filter((b) => b.campaignId === campaignId);
+  }
+
+  public submitKolSelectionBatch(data: {
+    campaignId: string;
+    title: string;
+    candidateCount?: number;
+    agencyFileName: string;
+    agencyFileSize?: string;
+    agencyFileUrl?: string;
+    agencySheetUrl?: string;
+    agencyNotes?: string;
+    agencySubmittedBy?: string;
+  }): KolSelectionBatch {
+    const campaignBatches = this.kolSelectionBatches.filter((b) => b.campaignId === data.campaignId);
+    const nextBatchNum = campaignBatches.length + 1;
+
+    const newBatch: KolSelectionBatch = {
+      id: `ksb-${Date.now()}`,
+      campaignId: data.campaignId,
+      batchNumber: nextBatchNum,
+      title: data.title || `达人初选提名表 (第${nextBatchNum}批)`,
+      candidateCount: data.candidateCount || 0,
+      agencyFileName: data.agencyFileName || '达人初选清单.xlsx',
+      agencyFileSize: data.agencyFileSize || '2.0 MB',
+      agencyFileUrl: data.agencyFileUrl || 'https://example.com/files/kol_selection.xlsx',
+      agencySheetUrl: data.agencySheetUrl || '',
+      agencyNotes: data.agencyNotes || '',
+      agencySubmittedAt: new Date().toISOString(),
+      agencySubmittedBy: data.agencySubmittedBy || '省广集团 GIMC 海外媒介组',
+      status: 'Pending GAC Review',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.kolSelectionBatches.unshift(newBatch);
+    this.saveToStorage();
+
+    const campName = this.getCampaignById(data.campaignId)?.name || 'Campaign';
+    this.addNotification({
+      type: 'kol_selection',
+      title: '【达人初选提报待办】省广已上传初选名单',
+      message: `省广已上传《${campName}》候选达人初选表格（第${nextBatchNum}批，共 ${data.candidateCount || 0} 位），请广汽国际进行定选审核并下发反馈表格。`,
+      recipientRole: 'Me',
+      relatedId: newBatch.id,
+      relatedType: 'kol_selection',
+      targetPage: 'kol-selection',
+      targetParams: { campaignId: data.campaignId, batchId: newBatch.id },
+      highlight: true,
+    });
+
+    fetch('/api/kol-selection/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+
+    return newBatch;
+  }
+
+  public reviewKolSelectionBatch(
+    id: string,
+    reviewData: {
+      status: KolSelectionBatchStatus;
+      gacFileName?: string;
+      gacFileSize?: string;
+      gacFileUrl?: string;
+      gacSheetUrl?: string;
+      gacNotes?: string;
+      gacReviewedBy?: string;
+      approvedKolCount?: number;
+    }
+  ): KolSelectionBatch | undefined {
+    const idx = this.kolSelectionBatches.findIndex((b) => b.id === id);
+    if (idx === -1) return undefined;
+
+    const current = this.kolSelectionBatches[idx];
+    const updated: KolSelectionBatch = {
+      ...current,
+      status: reviewData.status,
+      gacFileName: reviewData.gacFileName || (reviewData.status === 'Approved' ? '广汽达人定选确认与批注表_Final.xlsx' : '广汽达人筛选调整与修改意见.xlsx'),
+      gacFileSize: reviewData.gacFileSize || '2.2 MB',
+      gacFileUrl: reviewData.gacFileUrl || 'https://example.com/files/gac_kol_feedback.xlsx',
+      gacSheetUrl: reviewData.gacSheetUrl || '',
+      gacNotes: reviewData.gacNotes || (reviewData.status === 'Approved' ? '广汽国际审核意见：同意通过定选名单。' : '广汽国际审核意见：需调整达人画像。'),
+      gacReviewedAt: new Date().toISOString(),
+      gacReviewedBy: reviewData.gacReviewedBy || '广汽国际 GAC 海外营销部',
+      approvedKolCount: reviewData.approvedKolCount !== undefined ? reviewData.approvedKolCount : current.approvedKolCount,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.kolSelectionBatches[idx] = updated;
+    this.saveToStorage();
+
+    const campName = this.getCampaignById(current.campaignId)?.name || 'Campaign';
+    if (reviewData.status === 'Approved') {
+      this.addNotification({
+        type: 'kol_selection',
+        title: '【达人定选结果已下发】广汽国际审核通过',
+        message: `广汽国际已完成《${campName}》第${current.batchNumber}批达人定选审核（核准定选 ${updated.approvedKolCount || 0} 位），并已上传反馈表格，请省广推进 Brief 制定。`,
+        recipientRole: 'Agency',
+        relatedId: updated.id,
+        relatedType: 'kol_selection',
+        targetPage: 'kol-selection',
+        targetParams: { campaignId: current.campaignId, batchId: updated.id },
+        highlight: true,
+      });
+    } else {
+      this.addNotification({
+        type: 'kol_selection',
+        title: '【达人初选需调整】广汽已下发修改意见',
+        message: `广汽国际对《${campName}》第${current.batchNumber}批达人提报提出了调整要求并下发批注表格，请省广补充候选达人后重新提报。`,
+        recipientRole: 'Agency',
+        relatedId: updated.id,
+        relatedType: 'kol_selection',
+        targetPage: 'kol-selection',
+        targetParams: { campaignId: current.campaignId, batchId: updated.id },
+        highlight: true,
+      });
+    }
+
+    fetch('/api/kol-selection/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...reviewData }),
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
+
+    return updated;
+  }
+
+  public deleteKolSelectionBatch(id: string): void {
+    this.kolSelectionBatches = this.kolSelectionBatches.filter((b) => b.id !== id);
+    this.saveToStorage();
+
+    fetch(`/api/kol-selection/${id}`, {
+      method: 'DELETE',
+    })
+      .then(() => this.fetchServerData())
+      .catch(() => {});
   }
 
   // --- KOL Methods ---
@@ -234,6 +724,9 @@ class DataService {
   public addKol(kol: Omit<KOL, 'id' | 'createdAt' | 'updatedAt'>): KOL {
     const newKol: KOL = {
       ...kol,
+      tags: kol.tags || ['白名单'],
+      followers: kol.followers || '10.0万',
+      avatar: kol.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       id: `kol-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -266,6 +759,107 @@ class DataService {
         .then(() => this.fetchServerData())
         .catch(() => {});
     }
+  }
+
+  /**
+   * 智能根据达人名字检索或创建达人归档
+   * 若存在则关联并同步主页链接；若不存在则自动新建 KOL 档案
+   */
+  public findOrCreateKolByName(params: {
+    name: string;
+    profileUrl?: string;
+    platform?: Platform;
+    tags?: string[];
+    category?: string;
+    followers?: string;
+    followersCount?: string;
+  }): KOL {
+    const trimmedName = params.name.trim();
+    const existing = this.kols.find(
+      (k) => k.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+
+    if (existing) {
+      let needsUpdate = false;
+      const updated = { ...existing };
+      if (params.profileUrl && params.profileUrl.trim() && existing.profileUrl !== params.profileUrl.trim()) {
+        updated.profileUrl = params.profileUrl.trim();
+        needsUpdate = true;
+      }
+      if (params.platform && existing.platform !== params.platform) {
+        updated.platform = params.platform;
+        needsUpdate = true;
+      }
+      if (params.followers && existing.followers !== params.followers) {
+        updated.followers = params.followers;
+        needsUpdate = true;
+      }
+      if (params.tags && params.tags.length > 0) {
+        const currentTags = updated.tags || [];
+        const mergedTags = Array.from(new Set([...currentTags, ...params.tags]));
+        if (mergedTags.length !== currentTags.length) {
+          updated.tags = mergedTags;
+          needsUpdate = true;
+        }
+      }
+      if (needsUpdate) {
+        this.updateKol(updated);
+      }
+      return updated;
+    }
+
+    // Create new KOL
+    const platform = params.platform || 'Tiktok';
+    const newKol = this.addKol({
+      name: trimmedName,
+      platform,
+      profileUrl: params.profileUrl?.trim() || `https://${platform.toLowerCase()}.com/user/${Date.now()}`,
+      followers: params.followers || params.followersCount || '10.0万',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      tags: params.tags || ['中腰部', '汽车测评'],
+      category: params.category || '出海达人',
+    });
+
+    return newKol;
+  }
+
+  public addKolTag(kolId: string, tag: string) {
+    const kol = this.getKolById(kolId);
+    if (!kol) return;
+    const cleanTag = tag.trim();
+    if (!cleanTag) return;
+    const tags = kol.tags || [];
+    if (!tags.includes(cleanTag)) {
+      this.updateKol({
+        ...kol,
+        tags: [...tags, cleanTag],
+      });
+    }
+  }
+
+  public removeKolTag(kolId: string, tag: string) {
+    const kol = this.getKolById(kolId);
+    if (!kol) return;
+    const tags = kol.tags || [];
+    this.updateKol({
+      ...kol,
+      tags: tags.filter((t) => t !== tag),
+    });
+  }
+
+  public updateKolProfileUrl(kolId: string, profileUrl: string) {
+    const kol = this.getKolById(kolId);
+    if (!kol) return;
+    this.updateKol({
+      ...kol,
+      profileUrl: profileUrl.trim(),
+    });
+  }
+
+  public getAllAvailableTags(): string[] {
+    const defaultTags = ['白名单', '黑名单'];
+    const customTags = this.kols.flatMap((k) => k.tags || []);
+    return Array.from(new Set([...defaultTags, ...customTags])).filter(Boolean);
   }
 
   // --- Content Methods ---
@@ -323,6 +917,62 @@ class DataService {
     }
   }
 
+  /**
+   * 阶段审核流转专用方法：完成当前阶段审核后推进到下一阶段
+   */
+  public advanceContentStage(
+    contentId: string,
+    targetStage: Stage,
+    newStatus: Status,
+    notes?: string,
+    actor: 'Me' | 'Agency' = 'Me'
+  ) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    let currentOwner: CurrentOwner = 'Me';
+    if (targetStage === 'Brief') {
+      currentOwner = 'Agency';
+    } else if (targetStage === 'Script') {
+      currentOwner = 'KOL';
+    } else if (targetStage === 'Video') {
+      currentOwner = 'KOL';
+    } else if (targetStage === 'Completed') {
+      currentOwner = 'None';
+    }
+
+    const updated: ContentItem = {
+      ...content,
+      stage: targetStage,
+      status: newStatus,
+      currentOwner: currentOwner,
+      notes: notes !== undefined ? notes : content.notes,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.updateContent(updated);
+
+    this.addTimelineEvent({
+      contentId,
+      title: `审核流转至【${STAGE_LABELS[targetStage]}】`,
+      description: `阶段从 ${STAGE_LABELS[content.stage]} 审核通过并流转至 ${STAGE_LABELS[targetStage]}（状态：${STATUS_LABELS[newStatus]}）${notes ? `。审核批注：${notes}` : ''}`,
+      actor: actor,
+      type: 'approved',
+    });
+
+    const recipient: 'Me' | 'Agency' | 'All' = currentOwner === 'Agency' ? 'Agency' : currentOwner === 'Me' ? 'Me' : 'All';
+    this.addNotification({
+      type: 'stage_handover',
+      title: `【阶段流转】《${content.title}》进入${STAGE_LABELS[targetStage]}阶段`,
+      message: `内容任务已由${actor === 'Me' ? '广汽国际' : '省广'}流转至【${STAGE_LABELS[targetStage]}】（${STATUS_LABELS[newStatus]}），请负责人跟进处理。`,
+      recipientRole: recipient,
+      relatedId: contentId,
+      relatedType: targetStage === 'Brief' ? 'brief' : targetStage === 'Script' ? 'script' : targetStage === 'Video' ? 'video' : 'content',
+      targetPage: targetStage === 'Brief' ? 'brief-review' : targetStage === 'Script' ? 'script-review' : targetStage === 'Video' ? 'video-review' : 'contents',
+      targetParams: { id: contentId },
+    });
+  }
+
   // --- Version & Review Queries ---
   public getScriptVersions(contentId: string): ScriptVersion[] {
     return this.scriptVersions
@@ -378,6 +1028,195 @@ class DataService {
 
   // --- BUSINESS WORKFLOW ACTIONS ---
 
+  // 0. Submit / Upload Brief (省广提交/上传 Brief 给广汽国际审核)
+  public submitBrief(
+    contentId: string,
+    briefData: any,
+    actor: 'Agency' | 'Me' = 'Agency',
+    notes?: string
+  ) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    const updatedBriefData = {
+      ...(content.briefData || {}),
+      ...briefData,
+      submittedBy: actor === 'Agency' ? '省广营销集团 GIMC' : '广汽国际 GAC International',
+      submittedAt: new Date().toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+
+    content.briefData = updatedBriefData;
+    if (briefData.creativeDirection) {
+      content.briefText = briefData.creativeDirection;
+    }
+    if (briefData.briefDocUrl) {
+      content.briefUrl = briefData.briefDocUrl;
+    }
+    content.stage = 'Brief';
+    content.status = 'Waiting for Brief Approval';
+    content.currentOwner = 'Me'; // 移交给广汽国际审核
+    content.updatedAt = new Date().toISOString();
+    if (notes) {
+      content.notes = notes;
+    }
+
+    this.addTimelineEvent({
+      contentId,
+      title: '省广上传并提报 Brief (Brief Submitted)',
+      description: `省广项目组提交了达人《${content.title}》的完整 Brief 方案（含创作建议、素材包清单及投产比预估），流转至【广汽国际审核】`,
+      actor,
+      type: 'brief',
+    });
+
+    this.addNotification({
+      type: 'stage_handover',
+      title: '【Brief 待审核】省广已提报 Brief 需求单',
+      message: `《${content.title}》Brief 方案已由省广提报，请广汽国际进行审核批复。`,
+      recipientRole: 'Me',
+      relatedId: contentId,
+      relatedType: 'brief',
+      targetPage: 'brief-review',
+      targetParams: { id: contentId },
+      highlight: true,
+    });
+
+    this.saveToStorage();
+
+    fetch('/api/contents/' + contentId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(content),
+    }).catch(() => {});
+  }
+
+  // 0.1 Approve Brief (广汽国际审核通过 Brief)
+  public approveBrief(contentId: string, feedbackNotes?: string, actor: 'Me' | 'Agency' = 'Me') {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    if (content.briefData) {
+      content.briefData.approvedAt = new Date().toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      if (feedbackNotes) {
+        content.briefData.reviewFeedback = feedbackNotes;
+      }
+    }
+
+    content.stage = 'Script';
+    content.status = 'Waiting for KOL Script';
+    content.currentOwner = 'KOL';
+    content.updatedAt = new Date().toISOString();
+    if (feedbackNotes) {
+      content.notes = `广汽国际 Brief 审核通过批注：${feedbackNotes}`;
+    }
+
+    this.addTimelineEvent({
+      contentId,
+      title: '广汽国际核准 Brief (Brief Approved)',
+      description: `广汽国际审核通过该 Brief 方案！阶段正式推进至【Script 脚本创作】（状态：Waiting for KOL Script）。${feedbackNotes ? `批注：${feedbackNotes}` : ''}`,
+      actor,
+      type: 'approved',
+    });
+
+    this.addNotification({
+      type: 'stage_handover',
+      title: '【Brief 审核通过】已推进至脚本创作阶段',
+      message: `广汽国际已审核通过《${content.title}》Brief，请省广跟进达人撰写初稿脚本。`,
+      recipientRole: 'Agency',
+      relatedId: contentId,
+      relatedType: 'script',
+      targetPage: 'script-review',
+      targetParams: { id: contentId },
+      highlight: true,
+    });
+
+    this.saveToStorage();
+
+    fetch('/api/contents/' + contentId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(content),
+    }).catch(() => {});
+  }
+
+  // 0.2 Request Brief Revision (广汽国际要求修改 Brief)
+  public requestBriefRevision(contentId: string, feedback: string, actor: 'Me' | 'Agency' = 'Me') {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    if (content.briefData) {
+      content.briefData.reviewFeedback = feedback;
+    }
+
+    content.stage = 'Brief';
+    content.status = 'Brief Draft';
+    content.currentOwner = 'Agency'; // 退回给省广修改
+    content.updatedAt = new Date().toISOString();
+    content.notes = `广汽国际修改意见：${feedback}`;
+
+    this.addTimelineEvent({
+      contentId,
+      title: 'Brief 要求修改 (Brief Revision Requested)',
+      description: `广汽国际提出 Brief 修改意见，退回省广重新调整完善。意见：${feedback}`,
+      actor,
+      type: 'revision_req',
+    });
+
+    this.addNotification({
+      type: 'stage_handover',
+      title: '【Brief 需修改】广汽提出调整意见',
+      message: `广汽国际对《${content.title}》Brief 提出了修改要求：${feedback || '请调整后重新提报'}。`,
+      recipientRole: 'Agency',
+      relatedId: contentId,
+      relatedType: 'brief',
+      targetPage: 'brief-review',
+      targetParams: { id: contentId },
+      highlight: true,
+    });
+
+    this.saveToStorage();
+
+    fetch('/api/contents/' + contentId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(content),
+    }).catch(() => {});
+  }
+
+  // 0.3 Update Brief Data
+  public updateBriefData(contentId: string, briefData: any) {
+    const content = this.getContentById(contentId);
+    if (!content) return;
+
+    content.briefData = {
+      ...(content.briefData || {}),
+      ...briefData,
+    };
+    if (briefData.creativeDirection) {
+      content.briefText = briefData.creativeDirection;
+    }
+    if (briefData.briefDocUrl) {
+      content.briefUrl = briefData.briefDocUrl;
+    }
+    content.updatedAt = new Date().toISOString();
+    this.saveToStorage();
+
+    fetch('/api/contents/' + contentId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(content),
+    }).catch(() => {});
+  }
+
   // 1. Agency Adds Review
   public addAgencyReview(contentId: string, assetType: AssetType, versionId: string, reviewContent: string) {
     const content = this.getContentById(contentId);
@@ -405,6 +1244,18 @@ class DataService {
       description: `省广录入了审核意见，移交“我的审核” (Waiting for My Review)`,
       actor: 'Agency',
       type: 'agency_rev',
+    });
+
+    this.addNotification({
+      type: 'stage_handover',
+      title: assetType === 'Script' ? '【脚本待广汽终审】省广已完成初审' : '【视频待广汽终审】省广已完成初审',
+      message: `省广已完成《${content.title}》${assetType === 'Script' ? '脚本' : '视频'}初审并录入意见，已移交给广汽国际进行终审。`,
+      recipientRole: 'Me',
+      relatedId: contentId,
+      relatedType: assetType === 'Script' ? 'script' : 'video',
+      targetPage: assetType === 'Script' ? 'script-review' : 'video-review',
+      targetParams: { id: contentId },
+      highlight: true,
     });
 
     this.saveToStorage();
@@ -457,6 +1308,18 @@ class DataService {
         actor: 'Me',
         type: 'approved',
       });
+
+      this.addNotification({
+        type: 'stage_handover',
+        title: '【脚本终审已通过】已推进至视频制作',
+        message: `广汽国际已核准定稿《${content.title}》脚本，任务进入视频拍摄与剪辑阶段，请省广跟进达人交付视频。`,
+        recipientRole: 'Agency',
+        relatedId: contentId,
+        relatedType: 'video',
+        targetPage: 'video-review',
+        targetParams: { id: contentId },
+        highlight: true,
+      });
     } else {
       if (scriptVer) scriptVer.status = 'Revision Requested';
       content.status = 'Waiting for KOL Revision';
@@ -481,6 +1344,18 @@ class DataService {
         description: `要求达人对 Script V${scriptVer?.versionNumber || ''} 进行修改，反馈已推送到达人端`,
         actor: 'Me',
         type: 'revision_req',
+      });
+
+      this.addNotification({
+        type: 'stage_handover',
+        title: '【脚本终审需修改】广汽提出终审意见',
+        message: `广汽国际对《${content.title}》脚本提出了修改要求：${finalFeedback || '请调整后重新提报'}，请省广协助达人调整。`,
+        recipientRole: 'Agency',
+        relatedId: contentId,
+        relatedType: 'script',
+        targetPage: 'script-review',
+        targetParams: { id: contentId },
+        highlight: true,
       });
     }
 
@@ -540,9 +1415,21 @@ class DataService {
       this.addTimelineEvent({
         contentId,
         title: '广汽国际同意视频发布 (Video Approved)',
-        description: `广汽国际终审通过 Video V${videoVer?.versionNumber || ''}！系统触发规则：1. 提醒省广于 1 天内（截至 ${deadlineTimeStr}）上传发布链接；2. 系统将在 3 天后（${reminderTimeStr}）提醒广汽国际手动补充表现数据。`,
+        description: `广汽国际终审通过 Video V${videoVer?.versionNumber || ''}！系统履约流程：1. 提醒省广于 1 天内（截至 ${deadlineTimeStr}）上传发布链接；2. 系统将在 3 天后（${reminderTimeStr}）提醒省广团队补充录入播放量与互动表现数据。`,
         actor: 'Me',
         type: 'approved',
+      });
+
+      this.addNotification({
+        type: 'stage_handover',
+        title: '【视频终审通过】请于 1 天内上传发布链接',
+        message: `广汽国际已审核通过《${content.title}》成片！请省广督促达人在 1 天内（截至 ${deadlineTimeStr}）正式发布并上传海外发布链接。`,
+        recipientRole: 'Agency',
+        relatedId: contentId,
+        relatedType: 'video',
+        targetPage: 'video-review',
+        targetParams: { id: contentId },
+        highlight: true,
       });
     } else {
       if (videoVer) videoVer.status = 'Revision Requested';
@@ -568,6 +1455,18 @@ class DataService {
         description: `要求达人对 Video V${videoVer?.versionNumber || ''} 进行重新剪辑/修改`,
         actor: 'Me',
         type: 'revision_req',
+      });
+
+      this.addNotification({
+        type: 'stage_handover',
+        title: '【视频样片需调整】广汽提出终审修改意见',
+        message: `广汽国际对《${content.title}》视频提出了终审修改要求：${finalFeedback || '请重新微调剪辑'}，请省广协助达人调整。`,
+        recipientRole: 'Agency',
+        relatedId: contentId,
+        relatedType: 'video',
+        targetPage: 'video-review',
+        targetParams: { id: contentId },
+        highlight: true,
       });
     }
 
@@ -616,6 +1515,18 @@ class DataService {
         actor: 'KOL',
         type: 'script_sub',
       });
+
+      this.addNotification({
+        type: 'stage_handover',
+        title: '【脚本初稿已提交】等待省广初审',
+        message: `《${content.title}》已提交 Script V${nextVerNum}，请省广进行初审与 AI Brief 校验。`,
+        recipientRole: 'Agency',
+        relatedId: contentId,
+        relatedType: 'script',
+        targetPage: 'script-review',
+        targetParams: { id: contentId },
+        highlight: true,
+      });
     }
 
     this.saveToStorage();
@@ -663,6 +1574,18 @@ class DataService {
         actor: 'KOL',
         type: 'video_sub',
       });
+
+      this.addNotification({
+        type: 'stage_handover',
+        title: '【视频样片已提交】等待省广初审',
+        message: `《${content.title}》已提交 Video V${nextVerNum}，请省广进行初审与多语种字幕校验。`,
+        recipientRole: 'Agency',
+        relatedId: contentId,
+        relatedType: 'video',
+        targetPage: 'video-review',
+        targetParams: { id: contentId },
+        highlight: true,
+      });
     }
 
     this.saveToStorage();
@@ -676,6 +1599,14 @@ class DataService {
       .catch(() => {});
 
     return newVer;
+  }
+
+  public addScriptVersion(contentId: string, title: string, scriptText: string, fileUrl?: string): ScriptVersion {
+    return this.addNewScriptVersion(contentId, title, scriptText, fileUrl);
+  }
+
+  public addVideoVersion(contentId: string, videoUrl: string, fileUrl?: string): VideoVersion {
+    return this.addNewVideoVersion(contentId, videoUrl, fileUrl);
   }
 
   // 6. Mark Content Completed
@@ -694,6 +1625,16 @@ class DataService {
       description: '内容已成功审核通过并归档',
       actor: 'Me',
       type: 'completed',
+    });
+
+    this.addNotification({
+      type: 'stage_handover',
+      title: '【任务归档完成】《' + content.title + '》',
+      message: `内容《${content.title}》已顺利完成全部制作、发布及数据沉淀，任务已正式归档。`,
+      recipientRole: 'All',
+      relatedId: contentId,
+      relatedType: 'content',
+      targetPage: 'contents',
     });
 
     this.saveToStorage();
@@ -733,29 +1674,39 @@ class DataService {
     const content = this.getContentById(contentId);
     if (!content) return;
 
-    content.linkUploadedAt = new Date().toISOString();
+    const now = new Date();
+    content.linkUploadedAt = now.toISOString();
     content.status = 'Pending Data Entry';
-    content.currentOwner = 'Me'; // 移交给广汽国际，等待3天后补充数据
+    content.currentOwner = 'Agency'; // 移交给省广：3天后提醒省广补充数据
 
     if (!content.performanceData) {
       content.performanceData = {};
     }
     content.performanceData.publishUrl = publishUrl;
-    content.performanceData.publishedAt = publishedAt || new Date().toISOString().split('T')[0];
+    content.performanceData.publishedAt = publishedAt || now.toISOString().split('T')[0];
 
-    content.updatedAt = new Date().toISOString();
+    const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    content.dataReminderDate = threeDaysLater.toISOString();
+    content.updatedAt = now.toISOString();
 
-    const dataRemDate = content.dataReminderDate
-      ? new Date(content.dataReminderDate)
-      : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-    const remStr = `${dataRemDate.getMonth() + 1}月${dataRemDate.getDate()}日`;
+    const remStr = `${threeDaysLater.getMonth() + 1}月${threeDaysLater.getDate()}日`;
 
     this.addTimelineEvent({
       contentId,
       title: '省广已上传视频上线链接',
-      description: `省广按时提交了视频线上发布链接：${publishUrl}。已移交广汽国际，系统将于 3 天后（${remStr}）提醒广汽国际团队手动补充数据。`,
+      description: `省广按时提交了视频线上发布链接：${publishUrl}。系统已设定履约机制：将于上线发布 3 天后（${remStr}）在首页弹窗提醒省广团队补充录入播放量、互动量（点赞/评论/收藏/转发）及互动率数据。`,
       actor: 'Agency',
       type: 'agency_rev',
+    });
+
+    this.addNotification({
+      type: 'stage_handover',
+      title: '【发布链接已上传】《' + content.title + '》',
+      message: `省广已录入线上发布链接，系统将于 3 天后（${remStr}）提醒补充投放效果数据（播放、点赞、评论、互动率等）。`,
+      recipientRole: 'All',
+      relatedId: contentId,
+      relatedType: 'content',
+      targetPage: 'contents',
     });
 
     this.saveToStorage();
@@ -769,23 +1720,59 @@ class DataService {
       .catch(() => {});
   }
 
-  // 9. Update Performance Data
+  // 9. Update Performance Data (播放量、点赞量、评论量、收藏量、转发量、互动量及互动率)
   public updatePerformanceData(contentId: string, perfData: PerformanceData) {
     const content = this.getContentById(contentId);
     if (!content) return;
 
-    content.performanceData = perfData;
+    const views = perfData.views || 0;
+    const likes = perfData.likes || 0;
+    const comments = perfData.comments || 0;
+    const favorites = perfData.favorites || 0;
+    const shares = perfData.shares || 0;
+    const engagements = perfData.engagements !== undefined ? perfData.engagements : likes + comments + favorites + shares;
+    const engagementRate = perfData.engagementRate !== undefined 
+      ? perfData.engagementRate 
+      : views > 0 ? parseFloat(((engagements / views) * 100).toFixed(2)) : 0;
+
+    const threeSecondPlayRate = perfData.threeSecondPlayRate;
+    const fullPerfData: PerformanceData = {
+      ...perfData,
+      views,
+      threeSecondPlayRate,
+      likes,
+      comments,
+      favorites,
+      shares,
+      engagements,
+      engagementRate,
+      updatedAt: new Date().toISOString(),
+    };
+
+    content.performanceData = fullPerfData;
     content.stage = 'Completed';
     content.status = 'Completed';
     content.currentOwner = 'None';
     content.updatedAt = new Date().toISOString();
 
+    const threeSecondDesc = threeSecondPlayRate !== undefined ? `，3秒完播率 ${threeSecondPlayRate}%` : '';
+
     this.addTimelineEvent({
       contentId,
-      title: '广汽国际完成发布后数据补充',
-      description: '手动填写/更新了发布后的播放量、点赞、评论与分享数据，任务全流程归档完成。',
+      title: `${this.currentRole === 'Agency' ? '省广' : '广汽国际'}完成发布后数据录入与结算`,
+      description: `已完成发布后效果数据沉淀：播放量 ${views.toLocaleString()}${threeSecondDesc}，互动量 ${engagements.toLocaleString()} (点赞${likes.toLocaleString()} + 评论${comments.toLocaleString()} + 收藏${favorites.toLocaleString()} + 转发${shares.toLocaleString()})，综合互动率 ${engagementRate}%。任务全流程履约归档完成。`,
       actor: this.currentRole,
       type: 'completed',
+    });
+
+    this.addNotification({
+      type: 'stage_handover',
+      title: '【效果数据已录入】任务全流程履约归档',
+      message: `《${content.title}》已录入海外传播表现数据（播放量 ${views.toLocaleString()}，互动率 ${engagementRate}%），任务已顺利归档！`,
+      recipientRole: 'All',
+      relatedId: contentId,
+      relatedType: 'content',
+      targetPage: 'contents',
     });
 
     this.saveToStorage();
@@ -793,57 +1780,88 @@ class DataService {
     fetch('/api/performance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contentId, performanceData: perfData, actor: this.currentRole }),
+      body: JSON.stringify({ contentId, performanceData: fullPerfData, actor: this.currentRole }),
     })
       .then(() => this.fetchServerData())
       .catch(() => {});
   }
 
   // 9. Auth & User Role Methods
+  public isLoggedIn(): boolean {
+    return this.isLoggedInState && this.currentUser !== null;
+  }
+
   public getCurrentRole(): UserRole {
     return this.currentRole;
   }
 
   public getCurrentUser(): UserAccount | null {
-    if (!this.currentUser) {
-      this.currentUser = DEFAULT_ACCOUNTS[this.currentRole];
-    }
     return this.currentUser;
   }
 
   public async loginWithCredentials(username: string, password: string): Promise<UserAccount> {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.message || '登录失败，请检查账号和密码！');
-    }
-
-    const user: UserAccount = data.user;
-    this.currentUser = user;
-    this.currentRole = user.role;
-
     try {
-      localStorage.setItem(STORAGE_KEYS.USER_ROLE, JSON.stringify(user.role));
-      localStorage.setItem(STORAGE_KEYS.USER_ACCOUNT, JSON.stringify(user));
-    } catch (e) {
-      console.error(e);
-    }
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
 
-    this.notifyListeners();
-    return user;
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || '登录失败，请检查账号和密码！');
+      }
+
+      const user: UserAccount = data.user;
+      this.currentUser = user;
+      this.currentRole = user.role;
+      this.isLoggedInState = true;
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.USER_ROLE, JSON.stringify(user.role));
+        localStorage.setItem(STORAGE_KEYS.USER_ACCOUNT, JSON.stringify(user));
+        localStorage.setItem(STORAGE_KEYS.IS_LOGGED_IN, JSON.stringify(true));
+      } catch (e) {
+        console.error(e);
+      }
+
+      this.notifyListeners();
+      return user;
+    } catch (err: any) {
+      // Fallback for offline/local simulation if fetch fails
+      if (username === 'gac_admin' && password === 'gac2026') {
+        const user = DEFAULT_ACCOUNTS['Me'];
+        this.currentUser = user;
+        this.currentRole = 'Me';
+        this.isLoggedInState = true;
+        localStorage.setItem(STORAGE_KEYS.USER_ROLE, JSON.stringify('Me'));
+        localStorage.setItem(STORAGE_KEYS.USER_ACCOUNT, JSON.stringify(user));
+        localStorage.setItem(STORAGE_KEYS.IS_LOGGED_IN, JSON.stringify(true));
+        this.notifyListeners();
+        return user;
+      } else if (username === 'agency_user' && password === 'agency2026') {
+        const user = DEFAULT_ACCOUNTS['Agency'];
+        this.currentUser = user;
+        this.currentRole = 'Agency';
+        this.isLoggedInState = true;
+        localStorage.setItem(STORAGE_KEYS.USER_ROLE, JSON.stringify('Agency'));
+        localStorage.setItem(STORAGE_KEYS.USER_ACCOUNT, JSON.stringify(user));
+        localStorage.setItem(STORAGE_KEYS.IS_LOGGED_IN, JSON.stringify(true));
+        this.notifyListeners();
+        return user;
+      }
+      throw err;
+    }
   }
 
   public setCurrentRole(role: UserRole) {
     this.currentRole = role;
     this.currentUser = DEFAULT_ACCOUNTS[role];
+    this.isLoggedInState = true;
     try {
       localStorage.setItem(STORAGE_KEYS.USER_ROLE, JSON.stringify(role));
       localStorage.setItem(STORAGE_KEYS.USER_ACCOUNT, JSON.stringify(this.currentUser));
+      localStorage.setItem(STORAGE_KEYS.IS_LOGGED_IN, JSON.stringify(true));
     } catch (e) {
       console.error(e);
     }
@@ -852,8 +1870,10 @@ class DataService {
 
   public logout() {
     this.currentUser = null;
+    this.isLoggedInState = false;
     try {
       localStorage.removeItem(STORAGE_KEYS.USER_ACCOUNT);
+      localStorage.setItem(STORAGE_KEYS.IS_LOGGED_IN, JSON.stringify(false));
     } catch (e) {
       console.error(e);
     }
@@ -877,6 +1897,23 @@ class DataService {
     });
     if (!res.ok) {
       throw new Error(`AI Audit API failed with status ${res.status}`);
+    }
+    return res.json();
+  }
+
+  // 11. AI Script Document Formatting API Call
+  public async parseScriptDocWithAi(params: {
+    docRawText?: string;
+    fileName?: string;
+    docUrl?: string;
+  }) {
+    const res = await fetch('/api/ai/parse-script-doc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      throw new Error(`AI Parse Script API failed with status ${res.status}`);
     }
     return res.json();
   }

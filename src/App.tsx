@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from './services/dataService';
 import { UserRole, UserAccount } from './types';
+import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
 import { DashboardPage } from './pages/DashboardPage';
 import { MyReviewsPage } from './pages/MyReviewsPage';
 import { ContentsPage } from './pages/ContentsPage';
@@ -9,34 +11,24 @@ import { CampaignsPage } from './pages/CampaignsPage';
 import { CampaignDetailPage } from './pages/CampaignDetailPage';
 import { KolsPage } from './pages/KolsPage';
 import { KolDetailPage } from './pages/KolDetailPage';
+import { KolSelectionPage } from './pages/KolSelectionPage';
+import { BriefReviewPage } from './pages/BriefReviewPage';
+import { ScriptReviewPage } from './pages/ScriptReviewPage';
+import { VideoReviewPage } from './pages/VideoReviewPage';
+import { NotificationToast } from './components/NotificationToast';
 import { NewContentModal } from './components/NewContentModal';
 import { NewCampaignModal } from './components/NewCampaignModal';
 import { NewKolModal } from './components/NewKolModal';
 import { LoginModal } from './components/LoginModal';
 import { LoginPage } from './components/LoginPage';
-import {
-  LayoutDashboard,
-  CheckSquare,
-  FileText,
-  FolderKanban,
-  Users,
-  Plus,
-  RotateCcw,
-  Sparkles,
-  Layers,
-  UserCheck,
-  Building2,
-  Shield,
-  LogOut,
-  ChevronRight
-} from 'lucide-react';
 
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(dataService.isLoggedIn());
   const [currentPage, setCurrentPage] = useState<string>('dashboard');
   const [routeParams, setRouteParams] = useState<{ id?: string }>({});
-  const [myReviewsCount, setMyReviewsCount] = useState<number>(0);
   const [currentRole, setCurrentRole] = useState<UserRole>(dataService.getCurrentRole());
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(dataService.getCurrentUser());
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
   // Modals state
   const [showNewContentModal, setShowNewContentModal] = useState(false);
@@ -46,11 +38,9 @@ export default function App() {
 
   useEffect(() => {
     const update = () => {
+      setIsLoggedIn(dataService.isLoggedIn());
       setCurrentRole(dataService.getCurrentRole());
       setCurrentUser(dataService.getCurrentUser());
-      const contents = dataService.getContents();
-      const meCount = contents.filter((c) => c.currentOwner === 'Me').length;
-      setMyReviewsCount(meCount);
     };
     update();
     return dataService.subscribe(update);
@@ -62,257 +52,129 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleResetData = () => {
-    if (window.confirm('重置数据将把所有 Campaign、KOL 和 Content 恢复到演示初始状态。确定继续吗？')) {
-      dataService.resetData();
-      handleNavigate('dashboard');
-    }
+  const handleLogout = () => {
+    dataService.logout();
+    setIsLoggedIn(false);
   };
 
+  // If not logged in, show the login interface
+  if (!isLoggedIn) {
+    return (
+      <LoginPage
+        onLoginSuccess={(user) => {
+          setIsLoggedIn(true);
+          setCurrentRole(user.role);
+          setCurrentUser(user);
+        }}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 font-sans flex flex-col">
-      {/* Top Main Navigation Bar */}
-      <header className="bg-slate-900 text-white sticky top-0 z-40 border-b border-slate-800 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo & Brand */}
-            <div className="flex items-center gap-3">
-              <div
-                onClick={() => handleNavigate('dashboard')}
-                className="flex items-center gap-2.5 cursor-pointer group"
-              >
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm tracking-tight text-white flex items-center gap-1.5">
-                    <span>KOL 内容审核系统</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 font-semibold">
-                      Flow
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-400">广汽国际 · 省广代理商 · KOL 审稿协同系统</div>
-                </div>
-              </div>
-            </div>
+    <div className="min-h-screen bg-slate-100/80 text-slate-900 font-sans flex flex-col antialiased">
+      {/* Top Header: Only Title + Login Account + Logout */}
+      <Header
+        currentRole={currentRole}
+        currentUser={currentUser}
+        onOpenSwitchAccount={() => setShowLoginModal(true)}
+        onLogout={handleLogout}
+        onLogoClick={() => handleNavigate('dashboard')}
+      />
 
-            {/* Navigation Tabs */}
-            <nav className="hidden md:flex items-center gap-1">
-              <button
-                onClick={() => handleNavigate('dashboard')}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                  currentPage === 'dashboard'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                <span>控制台</span>
-              </button>
+      {/* Top-Right Notification Toast System */}
+      <NotificationToast
+        currentRole={currentRole}
+        onNavigate={handleNavigate}
+      />
 
-              <button
-                onClick={() => handleNavigate('my-reviews')}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors relative ${
-                  currentPage === 'my-reviews'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <CheckSquare className="w-4 h-4" />
-                <span>待我审核</span>
-                {myReviewsCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-rose-500 text-white animate-pulse">
-                    {myReviewsCount}
-                  </span>
-                )}
-              </button>
+      {/* Main Layout: Left Collapsible Sidebar + Right Scrollable Content */}
+      <div className="flex-1 flex">
+        {/* Sidebar */}
+        <Sidebar
+          currentPage={currentPage}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          onNavigate={handleNavigate}
+        />
 
-              <button
-                onClick={() => handleNavigate('contents')}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                  currentPage === 'contents' || currentPage === 'content-detail'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <FileText className="w-4 h-4" />
-                <span>Content 任务</span>
-              </button>
+        {/* Dynamic Content Area */}
+        <main
+          className={`flex-1 transition-all duration-300 pb-16 min-h-[calc(100vh-4rem)] ${
+            isSidebarCollapsed ? 'ml-16' : 'ml-60'
+          }`}
+        >
+          {currentPage === 'dashboard' && (
+            <DashboardPage
+              onNavigate={handleNavigate}
+              onOpenNewContent={() => setShowNewContentModal(true)}
+            />
+          )}
 
-              <button
-                onClick={() => handleNavigate('campaigns')}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                  currentPage === 'campaigns' || currentPage === 'campaign-detail'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <FolderKanban className="w-4 h-4" />
-                <span>Campaigns</span>
-              </button>
+          {currentPage === 'campaigns' && (
+            <CampaignsPage
+              onNavigate={handleNavigate}
+              onOpenNewCampaign={() => setShowNewCampaignModal(true)}
+            />
+          )}
 
-              <button
-                onClick={() => handleNavigate('kols')}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                  currentPage === 'kols' || currentPage === 'kol-detail'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>达人库</span>
-              </button>
-            </nav>
+          {currentPage === 'campaign-detail' && routeParams.id && (
+            <CampaignDetailPage
+              campaignId={routeParams.id}
+              onNavigate={handleNavigate}
+              onOpenNewContent={() => setShowNewContentModal(true)}
+            />
+          )}
 
-            {/* Right Action Tools & User Role Login Button */}
-            <div className="flex items-center gap-2">
-              {/* Logged in User Profile Badge / Switch Button */}
-              <button
-                onClick={() => setShowLoginModal(true)}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-2 transition-all ${
-                  currentRole === 'Me'
-                    ? 'bg-indigo-950/90 border-indigo-500/60 text-indigo-200 hover:border-indigo-400'
-                    : 'bg-emerald-950/90 border-emerald-500/60 text-emerald-200 hover:border-emerald-400'
-                }`}
-                title="点击切换账号登录或查看鉴权身份"
-              >
-                {currentRole === 'Me' ? (
-                  <Shield className="w-3.5 h-3.5 text-indigo-400" />
-                ) : (
-                  <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                )}
-                <span>
-                  {currentRole === 'Me' ? '广汽国际' : '省广代理商'}
-                  <span className="ml-1 opacity-75 font-mono text-[10px]">
-                    ({currentUser?.username || (currentRole === 'Me' ? 'gac_admin' : 'agency_user')})
-                  </span>
-                </span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10 text-slate-300 font-normal hover:bg-white/20">
-                  切换账号
-                </span>
-              </button>
+          {currentPage === 'kol-selection' && (
+            <KolSelectionPage onNavigate={handleNavigate} />
+          )}
 
-              <button
-                onClick={() => setShowNewContentModal(true)}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-950/50 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                <span>新建 Content 任务</span>
-              </button>
+          {currentPage === 'brief-review' && (
+            <BriefReviewPage onNavigate={handleNavigate} />
+          )}
 
-              <button
-                onClick={handleResetData}
-                title="重置测试演示数据"
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
+          {currentPage === 'script-review' && (
+            <ScriptReviewPage onNavigate={handleNavigate} />
+          )}
 
-        {/* Sub-nav on Mobile */}
-        <div className="md:hidden flex items-center justify-around border-t border-slate-800 px-2 py-2 bg-slate-900/90 text-xs">
-          <button
-            onClick={() => handleNavigate('dashboard')}
-            className={`p-1.5 rounded ${currentPage === 'dashboard' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}
-          >
-            控制台
-          </button>
-          <button
-            onClick={() => handleNavigate('my-reviews')}
-            className={`p-1.5 rounded flex items-center gap-1 ${currentPage === 'my-reviews' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}
-          >
-            <span>待我审核</span>
-            {myReviewsCount > 0 && <span className="text-[10px] bg-rose-500 text-white px-1 rounded-full">{myReviewsCount}</span>}
-          </button>
-          <button
-            onClick={() => handleNavigate('contents')}
-            className={`p-1.5 rounded ${currentPage === 'contents' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}
-          >
-            任务
-          </button>
-          <button
-            onClick={() => handleNavigate('campaigns')}
-            className={`p-1.5 rounded ${currentPage === 'campaigns' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}
-          >
-            项目
-          </button>
-          <button
-            onClick={() => handleNavigate('kols')}
-            className={`p-1.5 rounded ${currentPage === 'kols' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}
-          >
-            达人
-          </button>
-        </div>
-      </header>
+          {currentPage === 'video-review' && (
+            <VideoReviewPage onNavigate={handleNavigate} />
+          )}
 
-      {/* Main View Router */}
-      <main className="flex-1">
-        {currentPage === 'dashboard' && (
-          <DashboardPage
-            onNavigate={handleNavigate}
-            onOpenNewContent={() => setShowNewContentModal(true)}
-          />
-        )}
+          {currentPage === 'kols' && (
+            <KolsPage
+              onNavigate={handleNavigate}
+              onOpenNewKol={() => setShowNewKolModal(true)}
+            />
+          )}
 
-        {currentPage === 'my-reviews' && <MyReviewsPage onNavigate={handleNavigate} />}
+          {currentPage === 'kol-detail' && routeParams.id && (
+            <KolDetailPage
+              kolId={routeParams.id}
+              onNavigate={handleNavigate}
+              onOpenNewContent={() => setShowNewContentModal(true)}
+            />
+          )}
 
-        {currentPage === 'contents' && (
-          <ContentsPage
-            onNavigate={handleNavigate}
-            onOpenNewContent={() => setShowNewContentModal(true)}
-          />
-        )}
+          {currentPage === 'content-detail' && routeParams.id && (
+            <ContentDetailPage
+              contentId={routeParams.id}
+              onNavigate={handleNavigate}
+            />
+          )}
 
-        {currentPage === 'content-detail' && routeParams.id && (
-          <ContentDetailPage contentId={routeParams.id} onNavigate={handleNavigate} />
-        )}
+          {currentPage === 'contents' && (
+            <ContentsPage
+              onNavigate={handleNavigate}
+              onOpenNewContent={() => setShowNewContentModal(true)}
+            />
+          )}
 
-        {currentPage === 'campaigns' && (
-          <CampaignsPage
-            onNavigate={handleNavigate}
-            onOpenNewCampaign={() => setShowNewCampaignModal(true)}
-          />
-        )}
-
-        {currentPage === 'campaign-detail' && routeParams.id && (
-          <CampaignDetailPage
-            campaignId={routeParams.id}
-            onNavigate={handleNavigate}
-            onOpenNewContent={() => setShowNewContentModal(true)}
-          />
-        )}
-
-        {currentPage === 'kols' && (
-          <KolsPage
-            onNavigate={handleNavigate}
-            onOpenNewKol={() => setShowNewKolModal(true)}
-          />
-        )}
-
-        {currentPage === 'kol-detail' && routeParams.id && (
-          <KolDetailPage
-            kolId={routeParams.id}
-            onNavigate={handleNavigate}
-            onOpenNewContent={() => setShowNewContentModal(true)}
-          />
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 text-xs py-6 border-t border-slate-800 mt-12">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-          <div>
-            <span className="font-bold text-slate-200">KOL 内容审核管理系统</span>
-            <span className="mx-2">·</span>
-            <span>三方责任追溯 (省广代理商 / 广汽国际 / KOL达人)</span>
-          </div>
-          <div className="text-slate-500 font-mono">
-            Flow Version 1.0.0
-          </div>
-        </div>
-      </footer>
+          {currentPage === 'my-reviews' && (
+            <MyReviewsPage onNavigate={handleNavigate} />
+          )}
+        </main>
+      </div>
 
       {/* Global Modals */}
       <LoginModal

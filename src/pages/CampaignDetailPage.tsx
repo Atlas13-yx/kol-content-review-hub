@@ -4,8 +4,9 @@ import { Campaign, ContentItem } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { StageBadge } from '../components/StageBadge';
 import { OwnerBadge } from '../components/OwnerBadge';
+import { ContentInlineProgressBar } from '../components/ContentProgressBar';
 import { isOverdue } from '../utils/dateUtils';
-import { ArrowLeft, Calendar, FileText, Users, Plus, Edit3 } from 'lucide-react';
+import { ArrowLeft, Calendar, FileText, Users, Plus, Edit3, Lock, ShieldCheck, Shield } from 'lucide-react';
 import { EditCampaignModal } from '../components/EditCampaignModal';
 
 interface CampaignDetailPageProps {
@@ -22,6 +23,8 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
   const [campaign, setCampaign] = useState<Campaign | undefined>();
   const [contents, setContents] = useState<ContentItem[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
+  const currentRole = dataService.getCurrentRole();
+  const canEdit = dataService.canEditCampaign();
 
   useEffect(() => {
     const update = () => {
@@ -50,7 +53,7 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto font-sans">
       {/* Top Navigation */}
       <button
         onClick={() => onNavigate('campaigns')}
@@ -64,7 +67,7 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                 {campaign.status}
               </span>
@@ -72,22 +75,45 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
                 <Calendar className="w-3.5 h-3.5" />
                 {campaign.startDate} ~ {campaign.endDate}
               </span>
+              {canEdit ? (
+                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                  广汽专属调整权限
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-slate-400" />
+                  省广只读模式 (修改限广汽)
+                </span>
+              )}
             </div>
             <h1 className="text-xl font-bold text-slate-900">{campaign.name}</h1>
           </div>
 
           <div className="flex items-center gap-2.5 self-start">
-            <button
-              onClick={() => setShowEditModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>调整时间与设置</span>
-            </button>
+            {canEdit ? (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                title="调整 Campaign 时间、目标及 Brief"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                <span>调整时间与设置</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100/80 hover:bg-slate-200/80 text-slate-500 text-xs font-semibold transition-colors cursor-pointer"
+                title="省广查看详情 (修改权限仅限广汽国际)"
+              >
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>查看设置 (限广汽修改)</span>
+              </button>
+            )}
 
             <button
               onClick={onOpenNewContent}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>添加此 Campaign 下的 Content</span>
@@ -172,7 +198,7 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
               <thead className="bg-slate-100/80 text-slate-600 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="px-5 py-3">KOL 达人</th>
-                  <th className="px-5 py-3">Content 标题</th>
+                  <th className="px-5 py-3 min-w-[240px]">履约进度 (4阶段流程)</th>
                   <th className="px-5 py-3">类型</th>
                   <th className="px-5 py-3">平台</th>
                   <th className="px-5 py-3">Stage 阶段</th>
@@ -194,8 +220,8 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
                       }`}
                     >
                       <td className="px-5 py-3.5 font-bold text-slate-900">{getKolName(item.kolId)}</td>
-                      <td className="px-5 py-3.5 font-medium text-slate-800 max-w-[240px] truncate">
-                        {item.title}
+                      <td className="px-5 py-3.5">
+                        <ContentInlineProgressBar content={item} />
                       </td>
                       <td className="px-5 py-3.5">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${

@@ -132,6 +132,15 @@ export const NewCampaignModal: React.FC<NewCampaignModalProps> = ({ isOpen, onCl
             />
           </div>
 
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 space-y-1">
+            <div className="font-bold text-slate-800 flex items-center gap-1.5">
+              <span>💡 权限说明规则</span>
+            </div>
+            <p className="leading-relaxed">
+              省广代理商与广汽国际<strong>均有权限新建 Campaign</strong>。创建完成后，后期的排期调整、篇数目标变更与核心参数修改<strong>仅限广汽国际 (Me) 拥有调整权限</strong>。
+            </p>
+          </div>
+
           <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
             <button
               type="button"

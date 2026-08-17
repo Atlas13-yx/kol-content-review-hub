@@ -17,14 +17,23 @@ import {
   FileCode,
   Info,
   Lock,
+  ExternalLink,
+  Target,
+  Layers,
+  Package,
+  FileSpreadsheet,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
-import { AssetType, ContentItem, Campaign, Review, ScriptVersion, VideoVersion, UserRole } from '../types';
+import { AssetType, ContentItem, Campaign, KOL, Review, ScriptVersion, VideoVersion, UserRole } from '../types';
 
 interface IntegratedReviewWorkbenchModalProps {
   isOpen: boolean;
-  contentId: string;
-  assetType: AssetType;
+  contentId?: string;
+  content?: ContentItem;
+  assetType?: AssetType;
   versionNumber?: number;
   reviewerRole?: UserRole; // 'Me' or 'Agency'
   onClose: () => void;
@@ -41,18 +50,25 @@ const DEFAULT_SUBTITLES = `[00:00 - 00:08] (EN) Welcome to Paris Motor Show! Tod
 export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchModalProps> = ({
   isOpen,
   contentId,
-  assetType,
+  content: propContent,
+  assetType: propAssetType,
   versionNumber,
   reviewerRole,
   onClose,
   onSuccess,
 }) => {
+  const effectiveContentId = contentId || propContent?.id || '';
+  const effectiveAssetType: AssetType =
+    propAssetType || (propContent?.stage === 'Video' ? 'Video' : 'Script');
+
   // Data State
-  const [content, setContent] = useState<ContentItem | undefined>(undefined);
+  const [content, setContent] = useState<ContentItem | undefined>(propContent);
   const [campaign, setCampaign] = useState<Campaign | undefined>(undefined);
+  const [kol, setKol] = useState<KOL | undefined>(undefined);
   const [scriptVersions, setScriptVersions] = useState<ScriptVersion[]>([]);
   const [videoVersions, setVideoVersions] = useState<VideoVersion[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [showScriptDrawer, setShowScriptDrawer] = useState(false);
 
   // Logged-in Role & User
   const loggedInRole: UserRole = reviewerRole || dataService.getCurrentRole();
@@ -68,16 +84,60 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
   const [agencyContent, setAgencyContent] = useState('');
   const [myReviewContent, setMyReviewContent] = useState('');
   const [finalFeedbackContent, setFinalFeedbackContent] = useState('');
+  const [pastedImages, setPastedImages] = useState<string[]>([]);
+
+  // Clipboard Paste & Upload Image Handlers
+  const handlePasteImage = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+            if (dataUrl) {
+              setPastedImages((prev) => [...prev, dataUrl]);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file: File) => {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          if (dataUrl) {
+            setPastedImages((prev) => [...prev, dataUrl]);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setPastedImages((prev) => prev.filter((_, i) => i !== index));
+  };
 
   // Load Data
   useEffect(() => {
-    if (!isOpen || !contentId) return;
+    if (!isOpen || !effectiveContentId) return;
 
     const loadData = () => {
-      const c = dataService.getContentById(contentId);
+      const c = dataService.getContentById(effectiveContentId);
       setContent(c);
       if (c) {
         setCampaign(dataService.getCampaignById(c.campaignId));
+        setKol(dataService.getKols().find((k) => k.id === c.kolId));
         const svs = dataService.getScriptVersions(c.id);
         const vvs = dataService.getVideoVersions(c.id);
         setScriptVersions(svs);
@@ -97,7 +157,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
     loadData();
     const unsubscribe = dataService.subscribe(loadData);
     return () => unsubscribe();
-  }, [isOpen, contentId, reviewerRole]);
+  }, [isOpen, effectiveContentId, reviewerRole]);
 
   if (!isOpen || !content) return null;
 
@@ -107,10 +167,10 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
 
   const currentVerNumber =
     versionNumber ||
-    (assetType === 'Script' ? latestScriptVer?.versionNumber || 1 : latestVideoVer?.versionNumber || 1);
+    (effectiveAssetType === 'Script' ? latestScriptVer?.versionNumber || 1 : latestVideoVer?.versionNumber || 1);
 
   const currentVersionObj =
-    assetType === 'Script'
+    effectiveAssetType === 'Script'
       ? scriptVersions.find((v) => v.versionNumber === currentVerNumber) || latestScriptVer
       : videoVersions.find((v) => v.versionNumber === currentVerNumber) || latestVideoVer;
 
@@ -142,7 +202,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
         contentBrief: content.briefText || '多语种本地化测评视频，要求融入车展镜头与品牌 Tagline。',
         subtitlesText: subtitlesText.trim(),
         language: '多语种 (中/英/法/泰/阿)',
-        assetType,
+        assetType: effectiveAssetType,
       });
 
       if (res.success && res.result) {
@@ -164,34 +224,46 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
       return;
     }
 
+    const imageNote =
+      pastedImages.length > 0
+        ? `\n\n【📷 附带审核截图与标记 (${pastedImages.length}张)】\n` +
+          pastedImages.map((img, i) => `[截图 ${i + 1}](${img})`).join('\n')
+        : '';
+
     if (loggedInRole === 'Agency') {
-      if (!agencyContent.trim()) {
-        alert('请填写省广初审意见内容');
+      if (!agencyContent.trim() && pastedImages.length === 0) {
+        alert('请填写省广初审意见内容或粘贴审核截图');
         return;
       }
-      dataService.addAgencyReview(content.id, assetType, currentVersionObj.id, agencyContent.trim());
+      const fullContent = (agencyContent.trim() || '（无文字，已附带审核截图说明）') + imageNote;
+      dataService.addAgencyReview(content.id, effectiveAssetType, currentVersionObj.id, fullContent);
     } else {
       // Me (GAC International)
-      if (outcome === 'Request Revision' && !finalFeedbackContent.trim()) {
-        alert('选择“需要修改”时，必须填写反馈给达人的 Final Feedback（最终修改要求）');
+      if (outcome === 'Request Revision' && !finalFeedbackContent.trim() && pastedImages.length === 0) {
+        alert('选择“需要修改”时，必须填写反馈给达人的 Final Feedback（最终修改要求）或上传截图');
         return;
       }
 
-      if (assetType === 'Script') {
+      const fullMyContent = myReviewContent.trim() ? myReviewContent.trim() + imageNote : imageNote.trim();
+      const fullFinalContent = finalFeedbackContent.trim()
+        ? finalFeedbackContent.trim() + imageNote
+        : imageNote.trim() || '请参照广汽团队修改意见调整';
+
+      if (effectiveAssetType === 'Script') {
         dataService.submitMyScriptReview(
           content.id,
           currentVersionObj.id,
           outcome,
-          myReviewContent.trim(),
-          finalFeedbackContent.trim()
+          fullMyContent,
+          fullFinalContent
         );
       } else {
         dataService.submitMyVideoReview(
           content.id,
           currentVersionObj.id,
           outcome,
-          myReviewContent.trim(),
-          finalFeedbackContent.trim()
+          fullMyContent,
+          fullFinalContent
         );
       }
     }
@@ -222,20 +294,20 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-gradient-to-tr from-indigo-600 to-indigo-500 rounded-xl shadow-md text-white">
-              {assetType === 'Video' ? <VideoIcon className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+              {effectiveAssetType === 'Video' ? <VideoIcon className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-extrabold text-base text-slate-900">{content.title}</h3>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  {assetType === 'Video' ? '视频稿件审核' : '脚本稿件审核'} V{currentVerNumber}
+                  {effectiveAssetType === 'Video' ? '视频稿件审核' : '脚本稿件审核'} V{currentVerNumber}
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200/80 text-slate-700 border border-slate-300">
                   项目: {campaign?.name || '广汽国际出海营销'}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                集成式全屏审核工作台 • 多语种字幕 ASR/OCR 诊断与广汽国际/省广三方留痕
+                集成式全屏审核工作台 • {effectiveAssetType === 'Video' ? '成片视频预览与 AI 诊断' : 'AI Agent Brief 匹配诊断与脚本文档查验'} • 广汽国际/省广三方留痕
               </p>
             </div>
           </div>
@@ -275,30 +347,168 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
         {/* Modal 3-Column Main Content Grid */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-slate-200 bg-slate-100/50">
           
-          {/* LEFT COLUMN (4 Cols): 达人最后一版脚本 + 之前的修改意见 + AI 审核意见 */}
+          {/* LEFT COLUMN (4 Cols): Brief 需求规范与核心要点 (无论脚本还是视频审核均置于左侧首位) + AI 诊断 + 历史修改意见 */}
           <div className="lg:col-span-4 p-4 overflow-y-auto space-y-4 bg-slate-50 custom-scrollbar">
             
-            {/* 1. 达人最后一版脚本 */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2.5">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <FileCode className="w-4 h-4 text-cyan-600" />
-                  1. 达人最后一版脚本 ({latestScriptVer ? `V${latestScriptVer.versionNumber}` : '暂无'})
-                </span>
-                {latestScriptVer && (
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    {latestScriptVer.submittedAt?.slice(0, 10)}
+            {/* 1. Brief 需求方案与核心要点 (脚本审核阶段不放脚本，视频审核阶段增加 Brief) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <BookOpen className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-900">
+                    1. Brief 需求方案与核心要点
                   </span>
-                )}
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Brief 已核准定稿</span>
+                </span>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-36 overflow-y-auto text-xs text-slate-800 font-mono leading-relaxed custom-scrollbar">
-                {latestScriptVer ? (
-                  <p className="whitespace-pre-wrap">{latestScriptVer.scriptText || '（脚本未录入文本内容）'}</p>
-                ) : (
-                  <span className="text-slate-400 italic">达人暂未提交脚本正文</span>
-                )}
+
+              {/* Creative Direction & Focus (核心诉求与创作建议) */}
+              <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900">
+                  <span className="flex items-center gap-1">
+                    <Target className="w-3.5 h-3.5 text-indigo-600" />
+                    专项 Brief 核心诉求与创作建议:
+                  </span>
+                </div>
+                <p className="text-xs text-indigo-950 leading-relaxed font-medium">
+                  {content.briefData?.creativeDirection || content.briefText || '重点结合海外用户痛点与智能驾驶体验，突出欧洲五星安全与广汽品质背书。'}
+                </p>
               </div>
+
+              {/* Campaign Global Requirement (品牌战役总要求) */}
+              {campaign && (
+                <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-2.5 space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 flex items-center gap-1 text-[11px]">
+                      <Layers className="w-3.5 h-3.5 text-slate-600" />
+                      战役核心传播要求:
+                    </span>
+                    <span className="text-[10px] text-indigo-600 font-semibold truncate max-w-[150px]">
+                      {campaign.name}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">
+                    {campaign.brief || '突出巴黎车展首秀、欧洲五星安全、AION V智驾、3000万台下线品质背书，品牌 Tagline "Go For More"。'}
+                  </p>
+                </div>
+              )}
+
+              {/* Specifications Matrix */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-[10px] text-slate-500 block">选题与车型:</span>
+                  <span className="font-semibold text-slate-800 text-xs truncate block" title={content.topic}>
+                    {content.topic}
+                  </span>
+                </div>
+                <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-[10px] text-slate-500 block">内容形式 & 平台:</span>
+                  <span className="font-semibold text-slate-800 text-xs truncate block">
+                    {content.category} • {content.platform}
+                  </span>
+                </div>
+                <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-[10px] text-slate-500 block">达人 & 地区:</span>
+                  <span className="font-semibold text-slate-800 text-xs truncate block">
+                    {kol?.name || '指定达人'} • {content.briefData?.region || '海外市场'}
+                  </span>
+                </div>
+                <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-[10px] text-slate-500 block">预估曝光 / 预算:</span>
+                  <span className="font-semibold text-slate-800 text-xs truncate block">
+                    {content.briefData?.estimatedViews || '25K+'} • {content.briefData?.collaborationCost ? `¥${content.briefData.collaborationCost}` : '标准采购'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Provided Assets */}
+              {content.briefData?.providedAssets && content.briefData.providedAssets.length > 0 && (
+                <div className="space-y-1.5 text-xs">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    <Package className="w-3.5 h-3.5 text-slate-500" />
+                    官方素材提供清单:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {content.briefData.providedAssets.map((asset, idx) => (
+                      <span key={idx} className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium">
+                        {asset}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Brief Online Doc / Table Link */}
+              {(content.briefData?.briefDocUrl || content.briefUrl) && (
+                <div className="pt-0.5">
+                  <a
+                    href={content.briefData?.briefDocUrl || content.briefUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2 px-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-blue-700 text-xs font-bold flex items-center justify-between transition-colors shadow-2xs"
+                  >
+                    <div className="flex items-center gap-1.5 truncate">
+                      <FileSpreadsheet className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="truncate">查看 Brief 完整提报文档与在线表格</span>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  </a>
+                </div>
+              )}
+
+              {/* GAC Brief Review Note */}
+              {content.briefData?.reviewFeedback && (
+                <div className="p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-lg text-xs space-y-0.5">
+                  <span className="text-[10px] font-bold text-emerald-800 block">广汽国际 Brief 核准批注:</span>
+                  <p className="text-[11px] text-emerald-900 leading-relaxed font-medium">
+                    {content.briefData.reviewFeedback}
+                  </p>
+                </div>
+              )}
             </div>
+
+            {/* 视频审核阶段额外提供：定稿脚本对照展开卡片 */}
+            {effectiveAssetType === 'Video' && latestScriptVer && (
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm space-y-2">
+                <div
+                  onClick={() => setShowScriptDrawer(!showScriptDrawer)}
+                  className="flex items-center justify-between cursor-pointer select-none"
+                >
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-indigo-600" />
+                    定稿脚本分镜台词参考 (Script V{latestScriptVer.versionNumber})
+                  </span>
+                  <span className="text-xs text-indigo-600 font-semibold flex items-center gap-0.5">
+                    {showScriptDrawer ? '收起' : '展开核对'}
+                    {showScriptDrawer ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </span>
+                </div>
+
+                {showScriptDrawer && (
+                  <div className="space-y-2 pt-2 border-t border-slate-100 animate-in fade-in duration-150">
+                    {latestScriptVer.fileUrl && (
+                      <a
+                        href={latestScriptVer.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-[11px] border border-indigo-200 flex items-center justify-between transition-colors"
+                      >
+                        <span className="truncate">打开定稿 Word 脚本文档</span>
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                    )}
+                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[11px] font-mono text-slate-800 max-h-40 overflow-y-auto leading-relaxed custom-scrollbar whitespace-pre-wrap">
+                      {latestScriptVer.scriptText || '（暂无详细脚本文本）'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 2. 之前的修改意见历史 */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2.5">
@@ -310,7 +520,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                 <span className="text-[11px] text-slate-500 font-medium">共 {reviews.length} 条记录</span>
               </div>
 
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-2 max-h-44 overflow-y-auto pr-1 custom-scrollbar">
                 {reviews.length === 0 ? (
                   <div className="p-4 text-center text-slate-400 text-xs italic bg-slate-50 rounded-lg border border-slate-100">
                     暂无历史修改意见记录
@@ -358,35 +568,35 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
               </div>
             </div>
 
-            {/* 3. AI 智能初审插件意见 */}
+            {/* 3. AI Agent 与 Brief 匹配诊断结果 */}
             <div className="bg-gradient-to-br from-cyan-50/80 via-sky-50/50 to-indigo-50/40 border border-cyan-200 rounded-xl p-4 shadow-sm space-y-3">
               <div className="flex items-center justify-between border-b border-cyan-200/60 pb-2">
                 <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-cyan-600 animate-pulse" />
-                  3. AI 智能初审插件意见
+                  3. AI Agent 与 Brief 匹配诊断
                 </span>
                 <button
                   type="button"
                   onClick={handleRunAiAudit}
                   disabled={isAiLoading}
-                  className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm transition-all"
+                  className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
                 >
                   <Zap className="w-3 h-3" />
-                  <span>{isAiLoading ? '分析中...' : '运行 AI 审核'}</span>
+                  <span>{isAiLoading ? '分析中...' : '重新运行 AI Agent 诊断'}</span>
                 </button>
               </div>
 
               {!aiAuditResult ? (
                 <div className="p-3 bg-white/80 rounded-xl border border-cyan-200/80 text-center space-y-2">
                   <p className="text-xs text-slate-600">
-                    点击“运行 AI 审核”对多语种字幕/台词进行 Brief 卖点匹配与广汽品牌规避排查
+                    点击下方按钮，由 AI Agent 严格逐项比对{effectiveAssetType === 'Video' ? '视频成片/字幕' : '脚本正文'}与 Campaign Brief 的契合程度与缺失点
                   </p>
                   <button
                     type="button"
                     onClick={handleRunAiAudit}
                     className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-xs font-bold shadow transition-all cursor-pointer"
                   >
-                    立即运行 Gemini 智能诊断
+                    立即运行 AI Agent 匹配诊断
                   </button>
                 </div>
               ) : (
@@ -448,21 +658,29 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
 
           </div>
 
-          {/* MIDDLE COLUMN (5 Cols): 最新版本视频播放器或脚本正文 */}
-          <div className="lg:col-span-5 p-4 overflow-y-auto space-y-4 bg-slate-100/60 flex flex-col justify-between">
-            <div className="space-y-3">
+          {/* MIDDLE COLUMN (5 Cols): 最新版本视频播放器或脚本正文与 Word 附件 */}
+          <div className="lg:col-span-5 p-4 overflow-y-auto space-y-4 bg-slate-100/60 flex flex-col justify-between custom-scrollbar">
+            <div className="space-y-3 flex-1 flex flex-col">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <PlayCircle className="w-4 h-4 text-indigo-600" />
-                  最新版本视频播放器 ({assetType === 'Video' ? `Video V${currentVerNumber}` : `Script V${currentVerNumber}`})
+                  {effectiveAssetType === 'Video' ? (
+                    <PlayCircle className="w-4 h-4 text-indigo-600" />
+                  ) : (
+                    <FileText className="w-4 h-4 text-blue-600" />
+                  )}
+                  <span>
+                    {effectiveAssetType === 'Video'
+                      ? `最新版本成片视频播放器 (Video V${currentVerNumber})`
+                      : `最新版本脚本正文与 Word 附件 (Script V${currentVerNumber})`}
+                  </span>
                 </span>
-                <span className="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-mono font-bold">
-                  4K / 1080P 高清原片预览
+                <span className="px-2.5 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-300 text-[10px] font-mono font-bold">
+                  {effectiveAssetType === 'Video' ? '4K / 1080P 高清原片预览' : 'Word / DOCX 结构化解析'}
                 </span>
               </div>
 
-              {/* Video Player Box */}
-              {assetType === 'Video' ? (
+              {/* Video Player or Script Text Box */}
+              {effectiveAssetType === 'Video' ? (
                 <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-300 shadow-xl aspect-video flex items-center justify-center group">
                   <video
                     src={latestVideoVer?.videoUrl || 'https://assets.mixkit.co/videos/preview/mixkit-car-driving-on-a-road-at-sunset-41221-large.mp4'}
@@ -472,9 +690,31 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                   />
                 </div>
               ) : (
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 min-h-[280px] space-y-2 shadow-sm">
-                  <span className="text-xs font-bold text-slate-900">最新脚本完整预览文本：</span>
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs font-mono text-slate-800 max-h-[300px] overflow-y-auto leading-relaxed">
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex-1 flex flex-col space-y-3 shadow-sm min-h-[360px]">
+                  {/* Direct Open Document Link if fileUrl exists */}
+                  {latestScriptVer?.fileUrl ? (
+                    <div className="p-3 bg-blue-50/90 border border-blue-200 rounded-xl flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2 text-xs font-bold text-blue-950 truncate">
+                        <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span className="truncate">Word 脚本文档附件：{latestScriptVer.fileUrl.split('/').pop() || '脚本文档.docx'}</span>
+                      </div>
+                      <a
+                        href={latestScriptVer.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-sm transition-colors shrink-0 flex items-center gap-1"
+                      >
+                        <span>直接打开文档</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-500 italic p-2 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+                      <span>省广/达人已直接在系统录入完整脚本正文，格式已按分镜结构化解析：</span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 overflow-y-auto leading-relaxed custom-scrollbar whitespace-pre-wrap">
                     {latestScriptVer?.scriptText || '暂无详细脚本文本，请要求达人更新。'}
                   </div>
                 </div>
@@ -489,22 +729,16 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 text-[11px] block"> CDN 存储节点:</span>
-                  <span className="font-mono text-indigo-700 font-semibold truncate block">
-                    GAC-Global-CDN/v{currentVerNumber}/master.mp4
+                  <span className="text-slate-500 text-[11px] block">
+                    {effectiveAssetType === 'Video' ? 'CDN 视频存储节点:' : '云端文档存储节点:'}
+                  </span>
+                  <span className="font-mono text-blue-700 font-semibold truncate block">
+                    {effectiveAssetType === 'Video'
+                      ? `GAC-Global-CDN/v${currentVerNumber}/master.mp4`
+                      : `GAC-Cloud-Docs/v${currentVerNumber}/${latestScriptVer?.fileUrl?.split('/').pop() || 'script_v1.docx'}`}
                   </span>
                 </div>
               </div>
-            </div>
-
-            {/* Campaign Brief Summary Box */}
-            <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3.5 space-y-1 text-indigo-950">
-              <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider block">
-                本篇 Content 专项 Brief 核心要点:
-              </span>
-              <p className="text-xs text-indigo-900 leading-relaxed font-medium">
-                {content.briefText || '重点测评智驾系统与空间舒适度，融入车展镜头与品牌 Tagline “Go For More”。'}
-              </p>
             </div>
           </div>
 
@@ -584,7 +818,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                         <div>
                           <div className="text-xs font-bold text-slate-900">审核通过 (Approve)</div>
                           <div className="text-[10px] text-slate-500 font-normal">
-                            {assetType === 'Script' ? '通过脚本，流转至视频拍摄' : '通过视频，可安排上线发布'}
+                            {effectiveAssetType === 'Script' ? '通过脚本，流转至视频拍摄' : '通过视频，可安排上线发布'}
                           </div>
                         </div>
                       </button>
@@ -616,9 +850,10 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                       <label className="block text-xs font-bold text-slate-900">广汽国际团队内部意见</label>
                       <textarea
                         rows={3}
-                        placeholder="记录广汽国际团队内部审核判定要点..."
+                        placeholder="记录广汽国际团队内部审核判定要点（支持 Ctrl+V 粘贴截图）..."
                         value={myReviewContent}
                         onChange={(e) => setMyReviewContent(e.target.value)}
+                        onPaste={handlePasteImage}
                         className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-900 font-sans"
                       />
                     </div>
@@ -630,9 +865,10 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                         </label>
                         <textarea
                           rows={4}
-                          placeholder="标注需达人修改的具体条目，例如：1. 修正法语字幕；2. 结尾加入广汽国际 Logo 动效..."
+                          placeholder="标注需达人修改的具体条目（支持 Ctrl+V 粘贴截图）..."
                           value={finalFeedbackContent}
                           onChange={(e) => setFinalFeedbackContent(e.target.value)}
+                          onPaste={handlePasteImage}
                           className="w-full px-3 py-2 text-xs bg-amber-50/80 border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none text-slate-900 font-sans"
                           required
                         />
@@ -646,16 +882,51 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-emerald-900">省广代理商初审意见内容 *</label>
                     <textarea
-                      rows={8}
-                      placeholder="请输入省广初审意见，例如：画面剪辑流畅，建议将 00:18 处的字幕拼写修正，并强化车展场景..."
+                      rows={6}
+                      placeholder="请输入省广初审意见，按 Ctrl+V 可直接粘贴剪贴板截图..."
                       value={agencyContent}
                       onChange={(e) => setAgencyContent(e.target.value)}
+                      onPaste={handlePasteImage}
                       className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 leading-relaxed font-sans"
                       required
                     />
                   </div>
                 </div>
               )}
+
+              {/* Screenshot Upload / Paste Attachment Area */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                  <span className="flex items-center gap-1">
+                    <span>📷 审核修改截图/标记图附件 ({pastedImages.length}张)</span>
+                  </span>
+                  <label className="px-2.5 py-1 bg-white hover:bg-slate-100 text-indigo-700 border border-slate-300 rounded-lg text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1 shadow-2xs">
+                    <span>+ 上传截图</span>
+                    <input type="file" accept="image/*" multiple onChange={handleFileUpload} className="hidden" />
+                  </label>
+                </div>
+
+                <div className="text-[10px] text-slate-500">
+                  💡 提示：也可以在上方输入框内直接按 <kbd className="bg-white border px-1 rounded font-mono">Ctrl+V</kbd> / <kbd className="bg-white border px-1 rounded font-mono">Cmd+V</kbd> 粘贴剪贴板中的图片
+                </div>
+
+                {pastedImages.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {pastedImages.map((imgUrl, idx) => (
+                      <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-300 bg-black aspect-square">
+                        <img src={imgUrl} alt={`screenshot-${idx}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
+                          className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow transition-transform group-hover:scale-110"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Status Hint Footer */}
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 leading-relaxed">

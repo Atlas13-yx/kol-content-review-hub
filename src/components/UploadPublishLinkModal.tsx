@@ -106,8 +106,13 @@ export const UploadPublishLinkModal: React.FC<UploadPublishLinkModalProps> = ({
             />
           </div>
 
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600">
-            💡 上传链接后，系统将自动通知广汽国际团队，并在 3 天后提醒广汽团队手动补充播放量与互动数据。
+          <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200 text-[11px] text-purple-900 space-y-1">
+            <div className="font-bold flex items-center gap-1">
+              <span>💡 履约闭环机制：</span>
+            </div>
+            <div>
+              上传发布链接后，系统将记录实际上线时间，并于 <strong className="text-purple-950 font-bold">3 天后提醒省广团队</strong> 补充录入播放量、点赞量、评论量、收藏量、转发量等全套数据指标。
+            </div>
           </div>
 
           <div className="pt-2 flex items-center gap-3">

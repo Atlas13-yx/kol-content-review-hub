@@ -5,7 +5,9 @@ import { isOverdue, formatRelativeTime } from '../utils/dateUtils';
 import { StatusBadge } from '../components/StatusBadge';
 import { StageBadge } from '../components/StageBadge';
 import { OwnerBadge } from '../components/OwnerBadge';
-import { Search, Plus, RotateCcw } from 'lucide-react';
+import { ContentInlineProgressBar } from '../components/ContentProgressBar';
+import { SmartUploadVersionModal } from '../components/SmartUploadVersionModal';
+import { Search, Plus, RotateCcw, Sparkles, UploadCloud } from 'lucide-react';
 
 interface ContentsPageProps {
   onNavigate: (page: string, params?: { id?: string }) => void;
@@ -14,6 +16,7 @@ interface ContentsPageProps {
 
 export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNewContent }) => {
   const [contents, setContents] = useState<ContentItem[]>([]);
+  const [isSmartUploadOpen, setIsSmartUploadOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [campaignFilter, setCampaignFilter] = useState('');
   const [stageFilter, setStageFilter] = useState('');
@@ -70,9 +73,12 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
   };
 
   const getCurrentVersionLabel = (c: ContentItem) => {
-    if (c.stage === 'Script' || c.stage === 'Brief') {
+    if (c.stage === 'Brief') {
+      return c.status === 'Waiting for Brief Approval' ? 'Brief 待广汽审核' : 'Brief 待完善';
+    }
+    if (c.stage === 'Script') {
       const versions = dataService.getScriptVersions(c.id);
-      if (versions.length === 0) return '未提交';
+      if (versions.length === 0) return '等待脚本V1';
       return `Script V${versions[versions.length - 1].versionNumber}`;
     } else {
       const versions = dataService.getVideoVersions(c.id);
@@ -82,7 +88,7 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
   };
 
   return (
-    <div className="p-8 space-y-6 max-w-[1400px] mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1400px] mx-auto font-sans">
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
@@ -92,13 +98,25 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewContent}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm transition-colors self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>新建 Content 任务</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0 flex-wrap">
+          {/* 省广一键智能识别上传归档按钮 */}
+          <button
+            onClick={() => setIsSmartUploadOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-700 to-indigo-600 hover:from-indigo-800 hover:to-indigo-700 text-white font-semibold text-xs shadow-sm transition-all border border-indigo-500/30 whitespace-nowrap shrink-0"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-200 shrink-0" />
+            <UploadCloud className="w-3.5 h-3.5 shrink-0" />
+            <span className="whitespace-nowrap">智能上传脚本/视频 (省广自动归档)</span>
+          </button>
+
+          <button
+            onClick={onOpenNewContent}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-xs shadow-sm transition-colors whitespace-nowrap shrink-0"
+          >
+            <Plus className="w-4 h-4 text-slate-500 shrink-0" />
+            <span className="whitespace-nowrap">新建 Content 任务</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -186,11 +204,11 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
               className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             >
               <option value="">所有 Platform 平台</option>
-              <option value="小红书">小红书</option>
-              <option value="抖音">抖音</option>
-              <option value="B站">B站</option>
-              <option value="微博">微博</option>
-              <option value="视频号">视频号</option>
+              <option value="Tiktok">Tiktok</option>
+              <option value="Instagram">Instagram</option>
+              <option value="Facebook">Facebook</option>
+              <option value="Youtube">Youtube</option>
+              <option value="其他">其他</option>
             </select>
           </div>
         </div>
@@ -217,7 +235,7 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
               <tr>
                 <th className="px-4 py-3.5">KOL 达人</th>
                 <th className="px-4 py-3.5">Campaign</th>
-                <th className="px-4 py-3.5">Content 标题</th>
+                <th className="px-4 py-3.5 min-w-[240px]">履约进度 (4阶段流程)</th>
                 <th className="px-4 py-3.5">平台</th>
                 <th className="px-4 py-3.5">Stage 阶段</th>
                 <th className="px-4 py-3.5">当前版本</th>
@@ -246,11 +264,8 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
                     <td className="px-4 py-3.5 text-slate-600 max-w-[140px] truncate" title={getCampaignName(item.campaignId)}>
                       {getCampaignName(item.campaignId)}
                     </td>
-                    <td className="px-4 py-3.5 font-medium text-slate-900 max-w-[220px]">
-                      <div className="truncate font-semibold text-slate-800" title={item.title}>
-                        {item.title}
-                      </div>
-                      <div className="text-[11px] text-slate-400 truncate">{item.topic}</div>
+                    <td className="px-4 py-3.5">
+                      <ContentInlineProgressBar content={item} />
                     </td>
                     <td className="px-4 py-3.5 font-medium text-slate-600 whitespace-nowrap">{item.platform}</td>
                     <td className="px-4 py-3.5">
@@ -287,6 +302,15 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
           </table>
         </div>
       </div>
+
+      {/* Smart Upload Version Modal */}
+      <SmartUploadVersionModal
+        isOpen={isSmartUploadOpen}
+        onClose={() => setIsSmartUploadOpen(false)}
+        onSuccess={(contentId) => {
+          onNavigate('content-detail', { id: contentId });
+        }}
+      />
     </div>
   );
 };

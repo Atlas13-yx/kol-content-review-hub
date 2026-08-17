@@ -12,6 +12,8 @@ import {
   INITIAL_VIDEO_VERSIONS,
   INITIAL_REVIEWS,
   INITIAL_TIMELINES,
+  INITIAL_KOL_SELECTION_BATCHES,
+  INITIAL_NOTIFICATIONS,
 } from './src/data/mockData.js';
 
 dotenv.config({ path: '.env.local' });
@@ -43,6 +45,8 @@ interface DbData {
   videoVersions: any[];
   reviews: any[];
   timelines: any[];
+  kolSelectionBatches: any[];
+  notifications: any[];
   updatedAt: string;
 }
 
@@ -62,6 +66,8 @@ function getInitialData(): DbData {
     videoVersions: INITIAL_VIDEO_VERSIONS,
     reviews: INITIAL_REVIEWS,
     timelines: INITIAL_TIMELINES,
+    kolSelectionBatches: INITIAL_KOL_SELECTION_BATCHES,
+    notifications: INITIAL_NOTIFICATIONS,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -71,7 +77,14 @@ function loadDb(): DbData {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      return JSON.parse(raw);
+      const data = JSON.parse(raw);
+      if (!data.notifications) {
+        data.notifications = INITIAL_NOTIFICATIONS;
+      }
+      if (!data.kolSelectionBatches) {
+        data.kolSelectionBatches = INITIAL_KOL_SELECTION_BATCHES;
+      }
+      return data;
     }
   } catch (err) {
     console.error('Failed to read db.json, resetting to initial data:', err);
@@ -240,7 +253,7 @@ ${subtitlesText || '（暂无详细文本）'}
       if (aiClient) {
         try {
           const response = await aiClient.models.generateContent({
-            model: 'gemini-3.6-flash',
+            model: 'gemini-3.7-flash',
             contents: prompt,
             config: {
               responseMimeType: 'application/json',
@@ -293,6 +306,314 @@ ${subtitlesText || '（暂无详细文本）'}
     }
   });
 
+  // AI Script Document Formatting API Endpoint (解析文档并整理成统一格式)
+  app.post('/api/ai/parse-script-doc', async (req, res) => {
+    try {
+      const { docRawText = '', fileName = '', docUrl = '' } = req.body;
+
+      const prompt = `你是一个广汽国际 (GAC International) 出海 KOL 营销的高级脚本编辑专家。
+请将输入的文档文本或脚本草稿，重新整理、结构化并提炼为符合行业标准的规范脚本格式。
+
+【格式要求】
+- 必须按照时间轴或镜头切分，格式统一为：
+  [00:00 - 00:15] 画面/景别：(详细画面描述) | 口播/台词：(中英/多语种台词口播)
+  [00:15 - 00:35] 画面/景别：... | 口播/台词：...
+- 如果原始文本较简陋，请补全标点符号与分段，并保持专业优雅的出海汽车营销格调。
+
+【输入文档内容/描述】
+文件名: ${fileName}
+文档链接: ${docUrl}
+原始文本内容:
+${docRawText || '（用户未提供纯文本，请根据文件名与基础要求生成标准化脚本范例）'}
+
+请直接返回整理后的标准化脚本纯文本，不需要 Markdown 块外壳：`;
+
+      if (aiClient) {
+        try {
+          const response = await aiClient.models.generateContent({
+            model: 'gemini-3.6-flash',
+            contents: prompt,
+          });
+          const text = response.text?.trim();
+          if (text) {
+            return res.json({ success: true, formattedScriptText: text });
+          }
+        } catch (geminiErr: any) {
+          console.warn('Gemini script format fallback:', geminiErr?.message);
+        }
+      }
+
+      // Local fallback script formatting
+      const fallbackFormatted = docRawText.trim()
+        ? docRawText
+            .split('\n')
+            .filter((l: string) => l.trim())
+            .map((line: string, idx: number) => {
+              const start = (idx * 15).toString().padStart(2, '0');
+              const end = ((idx + 1) * 15).toString().padStart(2, '0');
+              return `[00:${start} - 00:${end}] 画面/景别：广汽出海车型展示与本地化评测镜头 | 口播/台词：${line.trim()}`;
+            })
+            .join('\n')
+        : `[00:00 - 00:15] 画面：巴黎车展 GAC 展台全景切入，展车外观滑轨镜头 | 口播：Bonjour! 欢迎来到 2026 巴黎车展 GAC 广汽展台！
+[00:15 - 00:35] 画面：镜头切至智能座舱，中控双屏联动演示 | 口播：搭载 GAC ADAS 2.0 智能驾驶系统，欧洲路况平稳驾驶。
+[00:35 - 00:55] 画面：安全车身结构展示与 Euro-NCAP 标牌 | 口播：欧洲五星安全品质，加上广汽 3000 万台全球下线品质背书。
+[00:55 - 01:10] 画面：车辆驶入巴黎夕阳大道，尾部 Logo 动画 | 口播：Go For More! 开启全新出海智驾体验。`;
+
+      return res.json({ success: true, formattedScriptText: fallbackFormatted });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Script doc parse failed' });
+    }
+  });
+
+  // AI Brief Quality Evaluation & Strategy Diagnostic API Endpoint
+  app.post('/api/ai/audit-brief-quality', async (req, res) => {
+    try {
+      const {
+        contentTitle = '',
+        campaignName = '',
+        campaignBrief = '',
+        kolName = '',
+        platform = '',
+        briefData = {},
+      } = req.body;
+
+      const prompt = `你是一个广汽国际（GAC International）出海品牌营销总监与资深内容审核专家。
+请对省广代理商提交的 KOL Brief（创作建议、核心诉求、达人指标、提供素材包与投产比预估）进行全方位的专业战略诊断与评审。
+
+【Campaign 与 KOL 背景】
+- 所属 Campaign: ${campaignName} (总体Brief: ${campaignBrief})
+- Content 任务: ${contentTitle}
+- 达人信息: ${kolName} (${platform})
+- 达人量级与地区: ${briefData.tier || '中腰部'} | ${briefData.region || '海外'} | ${briefData.accountCategory || '汽车'}
+- 粉丝量: ${briefData.followersCount || '未知'} | 均播: ${briefData.avgViews || '未知'} | 均赞: ${briefData.avgEngagements || '未知'}
+- 合作类型与预算: ${briefData.category || '二创'} | 预算: ¥${briefData.collaborationCost || 0} | 投流支持: ${briefData.adBoostCooperation || '无'}
+
+【省广提报的 Brief 创作建议与核心诉求】
+${briefData.creativeDirection || '（未填写创作建议）'}
+
+【省广提报的提供素材清单】
+${Array.isArray(briefData.providedAssets) ? briefData.providedAssets.join('、') : (briefData.providedAssets || '无')}
+
+【效果预估指标】
+预估播放量: ${briefData.estimatedViews || '无'} | 预估互动量: ${briefData.estimatedEngagements || '无'} | 预估CPC: ¥${briefData.estimatedCpc || '无'}
+
+【诊断与评审指南】
+1. **切入视角与话题反差度 (Angle & Hook)**：是否具备吸引目标海外区域受众（如俄语区/欧洲等）的话题冲击力（例如：3000万台产销对比、灯塔工厂自动化、品质硬实力）？
+2. **广汽国际品牌价值植入 (Brand Value)**：核心利益点与全球化出海布局是否自然融合，而非生硬植入？
+3. **素材包支持力度 (Asset Feasibility)**：提供的素材（如工厂快剪、下线仪式、海外专区等）是否足以支撑达人二创或原创？
+4. **投产比与预估指标合理性 (ROI & Estimation Check)**：根据达人历史均播、预算和预估CPC，评估ROI是否健康？
+5. **广汽国际审核裁决建议 (Recommendation & Feedback)**：给出明确的审核建议（推荐通过 / 需补充修改）及 2-3 条精辟的提升建议。
+
+请严格仅返回 JSON 格式：
+{
+  "score": 92,
+  "recommendation": "推荐通过",
+  "summary": "Brief 战略诊断总结...",
+  "dimensionScores": {
+    "topicHook": 94,
+    "brandIntegration": 90,
+    "assetSupport": 92,
+    "roiFeasibility": 91
+  },
+  "strengths": [
+    "亮点 1: 巧妙利用 3000 万对比凸显体量优势",
+    "亮点 2: 素材包覆盖全面，便于高效二创"
+  ],
+  "risksAndSuggestions": [
+    "优化建议 1: 建议在结尾强化海外服务网点与质保承诺",
+    "优化建议 2: 建议明确 00:15 秒内完成抓人悬念黄金 3 秒"
+  ],
+  "suggestedReviewComments": "广汽国际审核意见：同意立项并批准 Brief。切入点准确，产业反差感强，请省广指导达人按此方向撰写脚本，并重点把控工厂镜头与技术口播的准确性。"
+}`;
+
+      if (aiClient) {
+        try {
+          const response = await aiClient.models.generateContent({
+            model: 'gemini-3.7-flash',
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+            },
+          });
+
+          const text = response.text?.trim() || '';
+          if (text) {
+            const jsonResult = JSON.parse(text);
+            return res.json({ success: true, isAiGenerated: true, result: jsonResult });
+          }
+        } catch (geminiErr: any) {
+          console.warn('Gemini brief audit fallback:', geminiErr?.message);
+        }
+      }
+
+      // Local fallback strategic diagnostic
+      const localResult = {
+        score: 93,
+        recommendation: '推荐通过',
+        summary: `省广提报的 Brief 整体规划清晰、切入视角独特。以中国制造产业对比切入，能有效突破海外认知盲区，素材包配套完善，预估 CPC ¥${briefData.estimatedCpc || '0.60'} 投产比优良。`,
+        dimensionScores: {
+          topicHook: 95,
+          brandIntegration: 92,
+          assetSupport: 94,
+          roiFeasibility: 90,
+        },
+        strengths: [
+          '切入视角精准：以 3000 万台体量与区域年产量做反差对比，具备极高的话题穿透力与干货密度',
+          '素材包准备充分：涵盖下线仪式高光、工厂自动化与车型快剪，能大幅提升达人二创成片质量',
+          '受众画像契合：精准锁定俄语区/海外高意向商贸与汽车爱好者受众',
+        ],
+        risksAndSuggestions: [
+          '建议提醒达人开篇 3-5 秒使用工厂自动化高燃镜头作为 Hook，迅速抓住用户停留',
+          '建议脚本中严格校对车型技术参数（如混动续航、安全标准），保持官方严谨性',
+          '投流配合上建议锁定 25-45 岁海外有车/换车男性受众进行精准定向',
+        ],
+        suggestedReviewComments:
+          '广汽国际审核意见：同意通过此 Brief！切入点兼具传播热度与智造硬核实力，请省广按此 Brief 推进达人撰写详细分镜脚本。',
+      };
+
+      return res.json({ success: true, isAiGenerated: false, result: localResult });
+    } catch (err: any) {
+      console.error('Error in /api/ai/audit-brief-quality:', err);
+      res.status(500).json({ error: err.message || 'Brief audit failed' });
+    }
+  });
+
+  // Helper function for Script Version AI Agent Audit
+  const runAiScriptAuditAgent = async (
+    contentTitle: string,
+    campaignName: string,
+    campaignBrief: string,
+    contentBrief: string,
+    scriptText: string
+  ) => {
+    const prompt = `你是一个广汽国际（GAC International）出海营销 KOL 脚本审核 AI 专家 Agent。
+你的核心职责是：【严格比对脚本正文是否精准匹配 Brief 的各项要点】。
+
+【项目 Context 与 Brief 细则】
+- Campaign 名称: ${campaignName}
+- Campaign 总体 Brief 目标:
+${campaignBrief || '包含巴黎车展首秀宣传、广汽国际全球3000万下线品质背书、5星安全标准及智能座舱描述。'}
+
+- 本篇 Content (${contentTitle}) 专项 Brief 要求:
+${contentBrief || '聚焦本地化日常出行/生活场景，展示广汽车型智驾系统与品质故事。'}
+
+【待审核的脚本正文】
+${scriptText}
+
+【审核指令与输出规范】
+请把 Brief 拆解为具体要点（包括品牌口播台词、关键卖点、场景/画面、命名规范、Slogan 等），逐一与脚本正文核对：
+1. 找出【与 Brief 未匹配/缺失/偏离的 1、2、3 点具体项目】。每一点必须指出具体缺失了 Brief 的哪一条要求（如：“缺失 3000 万台品质背书口播”、“未在开头展示车展/展台镜头”等）。
+2. 找出【已匹配的 Brief 要点】。
+3. 给出清晰的修改指引。
+
+请严格仅返回 JSON 格式，不要有 Markdown 格式包装：
+{
+  "briefMatchScore": 82,
+  "overallPass": false,
+  "summary": "AI Agent 针对 Brief 逐条核验完成：脚本基本结构清晰，但存在与 Brief 核心要求的未匹配项。",
+  "unmatchedPoints": [
+    "1. 缺失 Brief 要求的“广汽累计下线 3000 万台品质背书”口播台词；",
+    "2. 开头 15 秒画面未按照 Brief 规定展示巴黎车展展台外景场景；",
+    "3. 智驾系统未按照 Brief 规范使用统一命名“GAC ADAS 2.0”。"
+  ],
+  "matchedPoints": [
+    "已包含 Euro-NCAP 五星安全认证相关口播",
+    "展示了智能座舱双屏交互与座椅空间"
+  ],
+  "suggestedRevisions": [
+    "请在 00:45 处补充口播：“广汽累计下线突破 3000 万台品质保证”；",
+    "请在前 15 秒画面中插入展台全景或车展背景；",
+    "请将文案中的 ADAS 规范化替换为 GAC ADAS 2.0。"
+  ],
+  "agencyReviewDraft": "省广初审意见：AI Agent 诊断提示本版脚本与 Brief 存在 3 点未匹配项（缺失3000万品质背书、车展全景及ADAS统一命名），请达人按提出来的 123 点补充修订。"
+}`;
+
+    if (aiClient) {
+      try {
+        const response = await aiClient.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: prompt,
+          config: { responseMimeType: 'application/json' },
+        });
+        const text = response.text?.trim();
+        if (text) {
+          return JSON.parse(text);
+        }
+      } catch (err) {
+        console.warn('Gemini script audit fallback:', err);
+      }
+    }
+
+    // Dynamic intelligent fallback matching algorithm
+    const fullBrief = `${campaignBrief} ${contentBrief}`.toLowerCase();
+    const scriptLower = scriptText.toLowerCase();
+
+    const unmatched: string[] = [];
+    const matched: string[] = [];
+    const suggestions: string[] = [];
+
+    // Check 1: 3000万台品质背书 / Quality endorsement
+    if (fullBrief.includes('3000万') || fullBrief.includes('品质背书')) {
+      if (scriptLower.includes('3000万') || scriptLower.includes('30 million') || scriptLower.includes('品质背书')) {
+        matched.push('已包含“广汽全球累计下线3000万台品质背书”口播台词');
+      } else {
+        unmatched.push(`${unmatched.length + 1}. 缺失 Brief 强制要求的“广汽全球累计下线 3000 万台品质背书”品牌口播；`);
+        suggestions.push('请在视频结尾或高潮处增加台词：“广汽累计下线已突破3000万台，品质保障毋庸置疑！”');
+      }
+    }
+
+    // Check 2: 车展 / 展台镜头 / Paris / Motor show
+    if (fullBrief.includes('车展') || fullBrief.includes('展台') || fullBrief.includes('paris')) {
+      if (scriptLower.includes('车展') || scriptLower.includes('展台') || scriptLower.includes('paris') || scriptLower.includes('motor show')) {
+        matched.push('已在脚本画面中露出车展/展台现场镜头');
+      } else {
+        unmatched.push(`${unmatched.length + 1}. 未按 Brief 场景规范在前 15 秒开场展示巴黎车展/展台外景镜头；`);
+        suggestions.push('请在开场 00:00 - 00:15 增加展台全景画外音与转场镜头。');
+      }
+    }
+
+    // Check 3: ADAS / 智驾 / GAC ADAS 2.0
+    if (fullBrief.includes('adas') || fullBrief.includes('智驾') || fullBrief.includes('智能驾驶')) {
+      if (scriptLower.includes('gac adas 2.0')) {
+        matched.push('智驾系统命名完全符合规范（GAC ADAS 2.0）');
+      } else if (scriptLower.includes('adas') || scriptLower.includes('智驾')) {
+        unmatched.push(`${unmatched.length + 1}. 智驾术语未标准化：Brief 要求统一使用“GAC ADAS 2.0”，当前文案未规范命名；`);
+        suggestions.push('请将脚本中所有的“ADAS”或“智能驾驶”统一更正为“GAC ADAS 2.0”。');
+      } else {
+        unmatched.push(`${unmatched.length + 1}. 缺失 Brief 要求的 GAC ADAS 2.0 智能驾驶辅助功能演示；`);
+        suggestions.push('请增加一段 15 秒关于 GAC ADAS 2.0 智能巡航与平稳驾驶的画面描述与台词。');
+      }
+    }
+
+    // Check 4: 5星安全 / Euro-NCAP
+    if (fullBrief.includes('5星') || fullBrief.includes('五星') || fullBrief.includes('ncap') || fullBrief.includes('安全')) {
+      if (scriptLower.includes('5星') || scriptLower.includes('五星') || scriptLower.includes('ncap') || scriptLower.includes('safety')) {
+        matched.push('已包含欧洲五星安全标准 (Euro-NCAP 5-Star) 相关表达');
+      } else {
+        unmatched.push(`${unmatched.length + 1}. 缺失 Brief 要求的“Euro-NCAP 5-Star 欧洲五星安全标准”宣传；`);
+        suggestions.push('请在安全品质章节补充口播：“Achieved the Euro-NCAP 5-Star safety rating”。');
+      }
+    }
+
+    // Default catch for perfect matches or unspecified brief
+    if (unmatched.length === 0) {
+      unmatched.push('1. 脚本正文与 Brief 核心卖点基本对齐，建议微调多语种口播语速并补充台词时间轴。');
+      suggestions.push('请省广与达人确认多语种字幕对齐细节。');
+    }
+
+    const score = Math.max(65, 100 - unmatched.length * 8);
+
+    return {
+      briefMatchScore: score,
+      overallPass: unmatched.length <= 1,
+      summary: `AI Agent 逐条比对完成：得分 ${score} 分。核对检测出 ${unmatched.length} 项与 Brief 未完全对齐/缺失的要点。`,
+      unmatchedPoints: unmatched,
+      matchedPoints: matched.length > 0 ? matched : ['符合出海汽车评测脚本分栏结构'],
+      suggestedRevisions: suggestions,
+      agencyReviewDraft: `省广初审意见：经 AI Agent 针对 Brief 逐条核验，本版脚本与 Brief 存在 ${unmatched.length} 点未完全匹配项（${unmatched.map(u => u.replace(/^\d+\.\s*/, '')).join('；')}），请达人参照提出来的 123 点修改。`,
+    };
+  };
+
   // GET Full Data
   app.get('/api/data', (req, res) => {
     res.json(db);
@@ -319,9 +640,17 @@ ${subtitlesText || '（暂无详细文本）'}
     res.json({ success: true, campaign: newCamp, updatedAt: db.updatedAt });
   });
 
-  // UPDATE Campaign
+  // UPDATE Campaign (Only 'Me' / GAC International has permission to edit campaigns)
   app.put('/api/campaigns/:id', (req, res) => {
     const { id } = req.params;
+    const { actor } = req.body;
+
+    if (actor === 'Agency') {
+      return res.status(403).json({
+        error: 'Permission denied: Campaign adjustment is only permitted for GAC International (Me). Agency cannot edit campaigns.',
+      });
+    }
+
     const idx = db.campaigns.findIndex((c) => c.id === id);
     if (idx !== -1) {
       db.campaigns[idx] = { ...db.campaigns[idx], ...req.body, updatedAt: new Date().toISOString() };
@@ -560,13 +889,29 @@ ${subtitlesText || '（暂无详细文本）'}
     res.json({ success: true, content, updatedAt: db.updatedAt });
   });
 
-  // ADD SCRIPT VERSION
-  app.post('/api/script-versions', (req, res) => {
+  // ADD SCRIPT VERSION (与自动 AI Agent Brief 审核结合)
+  app.post('/api/script-versions', async (req, res) => {
     const { contentId, title, scriptText, fileUrl } = req.body;
     const content = db.contents.find((c) => c.id === contentId);
+    const campaign = content ? db.campaigns.find((cp) => cp.id === content.campaignId) : null;
+
     const existingVersions = db.scriptVersions.filter((sv) => sv.contentId === contentId);
     const nextVerNum =
       existingVersions.length > 0 ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1 : 1;
+
+    // 默认自动触发 AI Agent 针对 Brief 的智能诊断与匹配测试
+    let aiAuditResult = null;
+    try {
+      aiAuditResult = await runAiScriptAuditAgent(
+        content?.title || '未命名脚本',
+        campaign?.name || '广汽出海营销',
+        campaign?.brief || '广汽全球化品牌宣传与车展评测要求',
+        content?.briefText || '强调欧洲五星安全、3000万台品质背书与巴黎车展首秀场景',
+        scriptText || ''
+      );
+    } catch (e) {
+      console.warn('Auto AI audit failed, continuing without AI audit:', e);
+    }
 
     const newVer = {
       id: `sv-${Date.now()}`,
@@ -577,6 +922,7 @@ ${subtitlesText || '（暂无详细文本）'}
       fileUrl,
       submittedAt: new Date().toISOString(),
       status: 'Submitted',
+      aiAuditResult: aiAuditResult || undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -588,11 +934,12 @@ ${subtitlesText || '（暂无详细文本）'}
       content.currentOwner = 'Agency';
       content.updatedAt = new Date().toISOString();
 
+      const unmatchedCount = aiAuditResult?.unmatchedPoints?.length || 0;
       addTimelineEvent(db, {
         contentId,
         title: `提交 Script V${nextVerNum}`,
-        description: `达人提交了新版本脚本 Script V${nextVerNum}，进入省广初审流程`,
-        actor: 'KOL',
+        description: `达人/省广提交了新版本脚本 Script V${nextVerNum}。🤖 AI Agent 已自动完成与 Brief 的匹配诊断：提炼出 ${unmatchedCount} 项与 Brief 未匹配/需改进点，供审核人员参考。`,
+        actor: 'Agency',
         type: 'script_sub',
       });
     }
@@ -698,6 +1045,212 @@ ${subtitlesText || '（暂无详细文本）'}
 
     saveDb(db);
     res.json({ success: true, content, updatedAt: db.updatedAt });
+  });
+
+  // SUBMIT KOL SELECTION BATCH (Agency Upload Channel)
+  app.post('/api/kol-selection/submit', (req, res) => {
+    const {
+      campaignId,
+      title,
+      candidateCount,
+      agencyFileName,
+      agencyFileSize,
+      agencyFileUrl,
+      agencySheetUrl,
+      agencyNotes,
+      agencySubmittedBy,
+    } = req.body;
+
+    if (!campaignId) {
+      return res.status(400).json({ error: 'Campaign is required' });
+    }
+
+    if (!db.kolSelectionBatches) {
+      db.kolSelectionBatches = [];
+    }
+
+    const campaignBatches = db.kolSelectionBatches.filter((b) => b.campaignId === campaignId);
+    const nextBatchNum = campaignBatches.length + 1;
+
+    const newBatch = {
+      id: `ksb-${Date.now()}`,
+      campaignId,
+      batchNumber: nextBatchNum,
+      title: title || `达人初选提名表 (第${nextBatchNum}批)`,
+      candidateCount: Number(candidateCount) || 0,
+      agencyFileName: agencyFileName || '达人初选清单.xlsx',
+      agencyFileSize: agencyFileSize || '2.0 MB',
+      agencyFileUrl: agencyFileUrl || 'https://example.com/files/kol_selection.xlsx',
+      agencySheetUrl: agencySheetUrl || '',
+      agencyNotes: agencyNotes || '',
+      agencySubmittedAt: new Date().toISOString(),
+      agencySubmittedBy: agencySubmittedBy || '省广集团 GIMC 海外媒介组',
+      status: 'Pending GAC Review',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    db.kolSelectionBatches.unshift(newBatch);
+    saveDb(db);
+    res.json({ success: true, batch: newBatch, updatedAt: db.updatedAt });
+  });
+
+  // REVIEW KOL SELECTION BATCH (GAC Review & Feedback Upload Channel)
+  app.post('/api/kol-selection/review', (req, res) => {
+    const {
+      id,
+      status, // 'Approved' | 'Revision Required'
+      gacFileName,
+      gacFileSize,
+      gacFileUrl,
+      gacSheetUrl,
+      gacNotes,
+      gacReviewedBy,
+      approvedKolCount,
+    } = req.body;
+
+    if (!db.kolSelectionBatches) {
+      db.kolSelectionBatches = [];
+    }
+
+    const batch = db.kolSelectionBatches.find((b) => b.id === id);
+    if (!batch) {
+      return res.status(404).json({ error: 'KOL Selection Batch not found' });
+    }
+
+    batch.status = status || 'Approved';
+    batch.gacFileName = gacFileName || (status === 'Approved' ? '广汽达人定选确认与批注表_Final.xlsx' : '广汽达人筛选调整与修改意见.xlsx');
+    batch.gacFileSize = gacFileSize || '2.2 MB';
+    batch.gacFileUrl = gacFileUrl || 'https://example.com/files/gac_kol_feedback.xlsx';
+    batch.gacSheetUrl = gacSheetUrl || '';
+    batch.gacNotes = gacNotes || (status === 'Approved' ? '广汽国际审核意见：同意通过定选名单。' : '广汽国际审核意见：需调整达人画像与补充新能源垂类博主。');
+    batch.gacReviewedAt = new Date().toISOString();
+    batch.gacReviewedBy = gacReviewedBy || '广汽国际 GAC 海外营销部';
+    if (approvedKolCount !== undefined) {
+      batch.approvedKolCount = Number(approvedKolCount);
+    }
+    batch.updatedAt = new Date().toISOString();
+
+    saveDb(db);
+    res.json({ success: true, batch, updatedAt: db.updatedAt });
+  });
+
+  // DELETE KOL SELECTION BATCH
+  app.delete('/api/kol-selection/:id', (req, res) => {
+    const { id } = req.params;
+    if (!db.kolSelectionBatches) {
+      db.kolSelectionBatches = [];
+    }
+    db.kolSelectionBatches = db.kolSelectionBatches.filter((b) => b.id !== id);
+    saveDb(db);
+    res.json({ success: true, updatedAt: db.updatedAt });
+  });
+
+  // --- NOTIFICATIONS API ---
+  // GET all notifications
+  app.get('/api/notifications', (req, res) => {
+    if (!db.notifications) {
+      db.notifications = [];
+    }
+    res.json({ success: true, notifications: db.notifications });
+  });
+
+  // POST create new notification
+  app.post('/api/notifications', (req, res) => {
+    const {
+      type,
+      title,
+      message,
+      recipientRole,
+      relatedId,
+      relatedType,
+      targetPage,
+      targetParams,
+      highlight,
+    } = req.body;
+
+    if (!db.notifications) {
+      db.notifications = [];
+    }
+
+    const newNotif = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      type: type || 'stage_handover',
+      title: title || '新流程提醒',
+      message: message || '',
+      recipientRole: recipientRole || 'All',
+      relatedId,
+      relatedType,
+      targetPage,
+      targetParams,
+      createdAt: new Date().toISOString(),
+      read: false,
+      dismissed: false,
+      highlight: !!highlight,
+    };
+
+    db.notifications.unshift(newNotif);
+    saveDb(db);
+    res.json({ success: true, notification: newNotif, updatedAt: db.updatedAt });
+  });
+
+  // Mark single notification as read
+  app.put('/api/notifications/:id/read', (req, res) => {
+    const { id } = req.params;
+    if (!db.notifications) db.notifications = [];
+    const notif = db.notifications.find((n) => n.id === id);
+    if (notif) {
+      notif.read = true;
+      saveDb(db);
+    }
+    res.json({ success: true, notification: notif, updatedAt: db.updatedAt });
+  });
+
+  // Dismiss notification toast (click X)
+  app.put('/api/notifications/:id/dismiss', (req, res) => {
+    const { id } = req.params;
+    if (!db.notifications) db.notifications = [];
+    const notif = db.notifications.find((n) => n.id === id);
+    if (notif) {
+      notif.dismissed = true;
+      saveDb(db);
+    }
+    res.json({ success: true, notification: notif, updatedAt: db.updatedAt });
+  });
+
+  // Mark all notifications as read
+  app.put('/api/notifications/read-all', (req, res) => {
+    const { role } = req.body;
+    if (!db.notifications) db.notifications = [];
+    db.notifications.forEach((n) => {
+      if (!role || n.recipientRole === role || n.recipientRole === 'All') {
+        n.read = true;
+      }
+    });
+    saveDb(db);
+    res.json({ success: true, updatedAt: db.updatedAt });
+  });
+
+  // Dismiss all notifications for a role
+  app.put('/api/notifications/dismiss-all', (req, res) => {
+    const { role } = req.body;
+    if (!db.notifications) db.notifications = [];
+    db.notifications.forEach((n) => {
+      if (!role || n.recipientRole === role || n.recipientRole === 'All') {
+        n.dismissed = true;
+      }
+    });
+    saveDb(db);
+    res.json({ success: true, updatedAt: db.updatedAt });
+  });
+
+  // DELETE notification
+  app.delete('/api/notifications/:id', (req, res) => {
+    const { id } = req.params;
+    if (!db.notifications) db.notifications = [];
+    db.notifications = db.notifications.filter((n) => n.id !== id);
+    saveDb(db);
+    res.json({ success: true, updatedAt: db.updatedAt });
   });
 
   // --- VITE MIDDLEWARE (Dev) / STATIC SERVING (Prod) ---

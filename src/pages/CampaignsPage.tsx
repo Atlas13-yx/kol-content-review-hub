@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/dataService';
 import { Campaign } from '../types';
-import { FolderKanban, Plus, Calendar, Users, FileText, Clock, Edit3 } from 'lucide-react';
+import { FolderKanban, Plus, Calendar, Users, FileText, Clock, Edit3, Lock, ShieldCheck, Shield } from 'lucide-react';
 import { EditCampaignModal } from '../components/EditCampaignModal';
 
 interface CampaignsPageProps {
@@ -12,6 +12,8 @@ interface CampaignsPageProps {
 export const CampaignsPage: React.FC<CampaignsPageProps> = ({ onNavigate, onOpenNewCampaign }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | undefined>(undefined);
+  const currentRole = dataService.getCurrentRole();
+  const canEdit = dataService.canEditCampaign();
 
   useEffect(() => {
     const update = () => {
@@ -24,23 +26,35 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({ onNavigate, onOpen
   const contents = dataService.getContents();
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto font-sans">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Campaign 项目管理 ({campaigns.length})</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900">Campaign 项目管理 ({campaigns.length})</h1>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {currentRole === 'Me' ? '广汽国际 (可创建+调整)' : '省广代理商 (可创建·仅查看)'}
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
             按营销节点或产品发布维度划分 Campaign，集中管理多位达人的联合投放任务
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewCampaign}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm transition-colors self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>新建 Campaign</span>
-        </button>
+        <div className="flex items-center gap-3 self-start md:self-auto">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100/90 rounded-xl border border-slate-200 text-slate-600 text-xs">
+            <Shield className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span>省广支持创建 · <strong>调整权限仅归属广汽 (Me)</strong></span>
+          </div>
+
+          <button
+            onClick={onOpenNewCampaign}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="whitespace-nowrap">新建 Campaign</span>
+          </button>
+        </div>
       </div>
 
       {/* Grid Cards */}
@@ -82,17 +96,32 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({ onNavigate, onOpen
                       <Calendar className="w-3.5 h-3.5" />
                       <span>{camp.startDate} ~ {camp.endDate}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCampaign(camp);
-                      }}
-                      className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
-                      title="调整 Campaign 时间与设置"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
+
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingCampaign(camp);
+                        }}
+                        className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
+                        title="广汽国际：调整 Campaign 时间与设置"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingCampaign(camp);
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                        title="省广查看详情 (调整权限仅限广汽国际)"
+                      >
+                        <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+                    )}
                   </div>
                 </div>
 

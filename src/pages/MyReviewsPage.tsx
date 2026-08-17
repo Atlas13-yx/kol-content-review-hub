@@ -4,6 +4,7 @@ import { ContentItem, Platform, Stage } from '../types';
 import { isOverdue, calculateWaitingTime } from '../utils/dateUtils';
 import { StatusBadge } from '../components/StatusBadge';
 import { StageBadge } from '../components/StageBadge';
+import { ContentInlineProgressBar } from '../components/ContentProgressBar';
 import { Search, Filter, RotateCcw, Clock, ArrowUpDown } from 'lucide-react';
 
 interface MyReviewsPageProps {
@@ -78,9 +79,15 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
   };
 
   const getCurrentVersionLabel = (c: ContentItem) => {
-    if (c.stage === 'Script' || c.stage === 'Brief') {
+    if (c.stage === 'Brief') {
+      return c.status === 'Waiting for Brief Approval' ? 'Brief 待广汽审核' : 'Brief 待完善';
+    }
+    if (c.stage === 'KOL Selection') {
+      return '达人定选评估';
+    }
+    if (c.stage === 'Script') {
       const versions = dataService.getScriptVersions(c.id);
-      if (versions.length === 0) return '未提交';
+      if (versions.length === 0) return '等待脚本V1';
       return `Script V${versions[versions.length - 1].versionNumber}`;
     } else {
       const versions = dataService.getVideoVersions(c.id);
@@ -90,7 +97,7 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto font-sans">
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
@@ -158,11 +165,13 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
             <select
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium"
             >
               <option value="">所有 Stage 阶段</option>
-              <option value="Script">Script 脚本</option>
-              <option value="Video">Video 视频</option>
+              <option value="KOL Selection">达人初筛 (KOL Selection)</option>
+              <option value="Brief">Brief 方案 (Brief Review)</option>
+              <option value="Script">Script 脚本 (Script Review)</option>
+              <option value="Video">Video 视频 (Video Review)</option>
             </select>
           </div>
 
@@ -212,7 +221,7 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
                 <tr>
                   <th className="px-5 py-3.5">KOL 达人</th>
                   <th className="px-5 py-3.5">所属 Campaign</th>
-                  <th className="px-5 py-3.5">Content 任务标题</th>
+                  <th className="px-5 py-3.5 min-w-[240px]">履约进度 (4阶段流程)</th>
                   <th className="px-5 py-3.5">Stage 阶段</th>
                   <th className="px-5 py-3.5">最新版本</th>
                   <th className="px-5 py-3.5">Status 状态</th>
@@ -242,11 +251,8 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
                       <td className="px-5 py-4 text-slate-600 max-w-[160px] truncate" title={getCampaignName(item.campaignId)}>
                         {getCampaignName(item.campaignId)}
                       </td>
-                      <td className="px-5 py-4 font-medium text-slate-900 max-w-[240px]">
-                        <div className="truncate font-semibold text-slate-800" title={item.title}>
-                          {item.title}
-                        </div>
-                        <div className="text-[11px] text-slate-400 truncate">{item.topic}</div>
+                      <td className="px-5 py-4">
+                        <ContentInlineProgressBar content={item} />
                       </td>
                       <td className="px-5 py-4">
                         <StageBadge stage={item.stage} />
@@ -282,14 +288,18 @@ export const MyReviewsPage: React.FC<MyReviewsPageProps> = ({ onNavigate }) => {
                             onNavigate('content-detail', { id: item.id });
                           }}
                           className={`px-3 py-1.5 rounded-lg text-white font-semibold text-xs shadow-sm transition-colors ${
-                            item.status === 'Pending Publish Link'
+                            item.stage === 'Brief'
+                              ? 'bg-emerald-600 hover:bg-emerald-700'
+                              : item.status === 'Pending Publish Link'
                               ? 'bg-purple-600 hover:bg-purple-700'
                               : item.status === 'Pending Data Entry'
                               ? 'bg-cyan-600 hover:bg-cyan-700'
                               : 'bg-indigo-600 hover:bg-indigo-700'
                           }`}
                         >
-                          {item.status === 'Pending Publish Link'
+                          {item.stage === 'Brief'
+                            ? '核准 Brief'
+                            : item.status === 'Pending Publish Link'
                             ? '上传发布链接'
                             : item.status === 'Pending Data Entry'
                             ? '补充表现数据'

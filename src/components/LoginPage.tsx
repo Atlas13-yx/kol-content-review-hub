@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { dataService } from '../services/dataService';
-import { UserAccount, UserRole } from '../types';
-import { Shield, Building2, Lock, User, ArrowRight, AlertCircle, Sparkles, Layers, CheckCircle2 } from 'lucide-react';
+import { UserAccount } from '../types';
+import { Shield, Building2, Lock, User, ArrowRight, AlertCircle, Sparkles, Layers } from 'lucide-react';
 
 interface LoginPageProps {
   onLoginSuccess: (user: UserAccount) => void;
@@ -14,8 +14,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   isModal = false,
   onCloseModal,
 }) => {
-  const [username, setUsername] = useState('gac_admin');
-  const [password, setPassword] = useState('gac2026');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -30,20 +30,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setErrorMsg('');
 
     try {
-      const user = await dataService.loginWithCredentials(username, password);
+      const user = await dataService.loginWithCredentials(username.trim(), password);
       onLoginSuccess(user);
       if (onCloseModal) onCloseModal();
     } catch (err: any) {
-      setErrorMsg(err.message || '登录失败，请检查输入的账号与密码！');
+      setErrorMsg(err.message || '账号或密码错误，请重新输入！');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickFill = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-    setErrorMsg('');
   };
 
   const currentLoggedInUser = dataService.getCurrentUser();
@@ -76,13 +70,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div className="space-y-3 pt-4">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                <span>三方责任追溯 & 独立鉴权</span>
+                <span>责任追溯 & 独立鉴权</span>
               </div>
               <h2 className="text-xl font-bold text-white leading-tight">
-                账号密码严格鉴权<br />按视角限制审核提交
+                {isModal ? '切换视角安全鉴权' : '账号密码严格鉴权'}<br />按视角限制审核提交
               </h2>
               <p className="text-xs text-slate-400 leading-relaxed">
-                为保证广汽国际与省广代理商之间的责任边界与审核规范，系统要求使用各自专属账号登录。以谁的视角登录就只能完成该视角的合法操作。
+                为保障广汽国际与省广代理商之间的责任边界与审核规范，系统要求使用各自专属账号进行身份验证。切换视角或登录均需输入对应的账号密码。
               </p>
             </div>
 
@@ -90,17 +84,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div className="space-y-2.5 pt-2">
               <div className="flex items-start gap-2.5 text-xs text-slate-300">
                 <Shield className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                <span><strong className="text-white">广汽国际 (GAC)</strong>：终审裁决、意见穿透、项目发布</span>
+                <span><strong className="text-white">广汽国际 (GAC International)</strong>：终审裁决、意见穿透、项目发布</span>
               </div>
               <div className="flex items-start gap-2.5 text-xs text-slate-300">
                 <Building2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span><strong className="text-white">省广代理商 (Agency)</strong>：省广初审、达人对接与脚本版本上传</span>
+                <span><strong className="text-white">省广代理商 (GIMC Agency)</strong>：省广初审、达人对接与脚本版本上传</span>
               </div>
             </div>
           </div>
 
           <div className="pt-8 mt-6 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-            <span>GAC Motor International</span>
+            <span>GAC International</span>
             <span>Flow Security v2.0</span>
           </div>
         </div>
@@ -110,14 +104,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <div className="max-w-md mx-auto w-full space-y-6">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                系统账号登录
+                {isModal ? '切换身份视角鉴权' : '系统账号登录'}
                 {currentLoggedInUser && (
                   <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 font-normal">
-                    已登录: {currentLoggedInUser.name}
+                    当前: {currentLoggedInUser.name}
                   </span>
                 )}
               </h3>
-              <p className="text-xs text-slate-400 mt-1">请输入广汽国际或省广代理商分配的登录凭证</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {isModal
+                  ? '请输入目标视角的专属账号与密码以完成切换'
+                  : '请输入广汽国际或省广代理商分配的登录凭证'}
+              </p>
             </div>
 
             {/* Error Banner */}
@@ -127,64 +125,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <span>{errorMsg}</span>
               </div>
             )}
-
-            {/* Quick Demo Fill Buttons */}
-            <div className="space-y-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                选择演示账号并一键填入 (Quick Fill)
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {/* GAC Admin Quick Card */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('gac_admin', 'gac2026')}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    username === 'gac_admin'
-                      ? 'bg-indigo-950/90 border-indigo-500 shadow-lg shadow-indigo-950/50 ring-1 ring-indigo-500/50'
-                      : 'bg-slate-800/60 border-slate-700/70 hover:border-indigo-400/50 hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5 text-indigo-400" />
-                      广汽国际账号
-                    </span>
-                    {username === 'gac_admin' && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />}
-                  </div>
-                  <div className="text-[11px] font-mono text-slate-300 mt-1.5">
-                    账号: <span className="text-white font-bold">gac_admin</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-slate-400">
-                    密码: <span className="text-slate-200">gac2026</span>
-                  </div>
-                </button>
-
-                {/* Agency Quick Card */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('agency_user', 'agency2026')}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    username === 'agency_user'
-                      ? 'bg-emerald-950/90 border-emerald-500 shadow-lg shadow-emerald-950/50 ring-1 ring-emerald-500/50'
-                      : 'bg-slate-800/60 border-slate-700/70 hover:border-emerald-400/50 hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-emerald-300 flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                      省广代理商账号
-                    </span>
-                    {username === 'agency_user' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
-                  </div>
-                  <div className="text-[11px] font-mono text-slate-300 mt-1.5">
-                    账号: <span className="text-white font-bold">agency_user</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-slate-400">
-                    密码: <span className="text-slate-200">agency2026</span>
-                  </div>
-                </button>
-              </div>
-            </div>
 
             {/* Login Form */}
             <form onSubmit={handleLogin} className="space-y-4 pt-2">
@@ -197,8 +137,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="例如: gac_admin 或 agency_user"
+                  placeholder="请输入账号"
                   required
+                  autoFocus
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
                 />
               </div>
@@ -212,7 +153,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="请输入登录密码"
+                  placeholder="请输入密码"
                   required
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
                 />
@@ -224,10 +165,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4 cursor-pointer"
               >
                 {loading ? (
-                  <span>正在验证后台凭证...</span>
+                  <span>正在验证身份凭证...</span>
                 ) : (
                   <>
-                    <span>登录并进入系统</span>
+                    <span>{isModal ? '验证并切换视角' : '验证登录并进入系统'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

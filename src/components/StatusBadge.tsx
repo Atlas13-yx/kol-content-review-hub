@@ -13,7 +13,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
 
   switch (status) {
     case 'Waiting for My Review':
-      // Highly prominent for "Waiting for My Review"
+    case 'Waiting for Brief Approval':
+      // Highly prominent for "Waiting for My Review" / "Waiting for Brief Approval"
       colorClasses = 'bg-indigo-600 text-white font-medium shadow-sm ring-1 ring-indigo-700/50';
       break;
     case 'Waiting for Agency Review':
@@ -49,7 +50,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
 
   return (
     <span className={`inline-flex items-center whitespace-nowrap transition-colors ${sizeClasses} ${colorClasses}`}>
-      {status === 'Waiting for My Review' && (
+      {(status === 'Waiting for My Review' || status === 'Waiting for Brief Approval') && (
         <span className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />
       )}
       {label}

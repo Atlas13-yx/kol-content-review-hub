@@ -12,6 +12,9 @@ export const StageBadge: React.FC<StageBadgeProps> = ({ stage, size = 'md' }) =>
   let styles = 'bg-zinc-100 text-zinc-700 border-zinc-200';
 
   switch (stage) {
+    case 'KOL Selection':
+      styles = 'bg-amber-50 text-amber-700 border-amber-200/80';
+      break;
     case 'Brief':
       styles = 'bg-slate-100 text-slate-700 border-slate-200';
       break;

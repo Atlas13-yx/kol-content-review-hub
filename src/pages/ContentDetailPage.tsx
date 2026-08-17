@@ -11,7 +11,10 @@ import { NewScriptVersionModal } from '../components/NewScriptVersionModal';
 import { NewVideoVersionModal } from '../components/NewVideoVersionModal';
 import { PerformanceModal } from '../components/PerformanceModal';
 import { UploadPublishLinkModal } from '../components/UploadPublishLinkModal';
-import { AiSubtitleAuditModal } from '../components/AiSubtitleAuditModal';
+import { ContentProgressBar } from '../components/ContentProgressBar';
+import { IntegratedReviewWorkbenchModal } from '../components/IntegratedReviewWorkbenchModal';
+import { UploadBriefModal } from '../components/UploadBriefModal';
+import { AiBriefAuditModal } from '../components/AiBriefAuditModal';
 import { isOverdue } from '../utils/dateUtils';
 import {
   ArrowLeft,
@@ -33,9 +36,20 @@ import {
   ThumbsUp,
   MessageSquare,
   Share2,
+  Bookmark,
+  Activity,
+  Percent,
+  Calculator,
   Eye,
+  Timer,
+  Zap,
   Shield,
-  Lock
+  Lock,
+  Package,
+  Layers,
+  TrendingUp,
+  FileSpreadsheet,
+  ChevronRight,
 } from 'lucide-react';
 
 interface ContentDetailPageProps {
@@ -67,10 +81,10 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
   const [showNewVideoModal, setShowNewVideoModal] = useState(false);
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const [showUploadLinkModal, setShowUploadLinkModal] = useState(false);
-  const [showAiAuditModal, setShowAiAuditModal] = useState(false);
-  const [aiAuditAssetType, setAiAuditAssetType] = useState<AssetType>('Video');
-  const [aiAuditVersionNum, setAiAuditVersionNum] = useState<number>(1);
-  const [aiAuditInitialSubtitles, setAiAuditInitialSubtitles] = useState<string>('');
+  const [showIntegratedWorkbench, setShowIntegratedWorkbench] = useState(false);
+  const [workbenchAssetType, setWorkbenchAssetType] = useState<AssetType>('Script');
+  const [showUploadBriefModal, setShowUploadBriefModal] = useState(false);
+  const [showAiBriefAuditModal, setShowAiBriefAuditModal] = useState(false);
 
   const reloadData = () => {
     setCurrentRole(dataService.getCurrentRole());
@@ -150,7 +164,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
   };
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto pb-24">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto pb-24 font-sans">
       {/* Back & Breadcrumb */}
       <div className="flex items-center justify-between">
         <button
@@ -235,7 +249,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                       <strong className="text-white font-mono bg-purple-950/80 px-1.5 py-0.5 rounded border border-purple-400/40">
                         {content.linkUploadDeadline ? new Date(content.linkUploadDeadline).toLocaleString('zh-CN') : '1天内'}
                       </strong>{' '}
-                      前在小红书/抖音等平台上线，并在此提交公开视频链接。
+                      前在 Tiktok / Instagram / Youtube / Facebook 等平台上线，并在此提交公开视频链接。
                     </p>
                   </div>
                 </div>
@@ -249,7 +263,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
               </div>
             )}
 
-            {/* 2. GAC International (Me) 3-Day Data Reminder Banner */}
+            {/* 2. Agency (省广) 3-Day Data Reminder Banner */}
             {(content.videoApprovedAt || content.status === 'Pending Data Entry') && (
               <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 border border-cyan-500/30">
                 <div className="flex items-start gap-3">
@@ -258,17 +272,17 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                   </div>
                   <div className="space-y-1">
                     <div className="font-bold text-sm text-cyan-100 flex items-center gap-2">
-                      <span>📊 【广汽数据提醒】视频发布 3 天后手动补充表现数据</span>
+                      <span>📊 【省广数据履约提醒】视频发布 3 天后补充详细投放数据</span>
                       <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-500/30 text-cyan-200 border border-cyan-400/30 font-mono">
-                        3天后数据归档
+                        上线满3天数据归档
                       </span>
                     </div>
                     <p className="text-xs text-cyan-200/90 leading-relaxed">
-                      系统预置提醒：广汽团队已设置在视频发布 3 天后（提醒触发日期：
+                      系统履约机制：视频公开发布 3 天后（提醒触发日期：
                       <strong className="text-white font-mono bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-400/40">
                         {content.dataReminderDate ? new Date(content.dataReminderDate).toLocaleDateString('zh-CN') : '3天后'}
                       </strong>
-                      ）手动补充该视频的播放量、点赞量、评论与分享互动数。
+                      ）由省广团队补充录入该视频的播放量、3秒完播率、点赞、评论、收藏与转发互动数据。
                       {content.performanceData?.publishUrl && (
                         <span className="ml-1 text-emerald-300">
                           (省广已提交上线链接：<a href={content.performanceData.publishUrl} target="_blank" rel="noreferrer" className="underline font-mono">{content.performanceData.publishUrl}</a>)
@@ -282,7 +296,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                   className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <BarChart2 className="w-4 h-4" />
-                  <span>手动补充表现数据</span>
+                  <span>补充录入表现数据</span>
                 </button>
               </div>
             )}
@@ -313,9 +327,10 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                   if (currentRole !== 'Agency') {
                     if (!window.confirm('您当前身份为【广汽国际】，是否继续代省广团队录入初审意见？')) return;
                   }
-                  setShowAgencyModal(true);
+                  setWorkbenchAssetType(content.stage === 'Video' ? 'Video' : 'Script');
+                  setShowIntegratedWorkbench(true);
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-900/20 transition-all"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-900/20 transition-all cursor-pointer"
               >
                 <Building2 className="w-4 h-4" />
                 <span>录入省广审核意见</span>
@@ -330,9 +345,10 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                     alert('【身份限制】您当前身份为【省广代理商】，不能代替广汽国际录入终审意见！请在右上角‘切换身份’为广汽国际。');
                     return;
                   }
-                  setShowMyReviewModal(true);
+                  setWorkbenchAssetType(content.stage === 'Video' ? 'Video' : 'Script');
+                  setShowIntegratedWorkbench(true);
                 }}
-                className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all animate-bounce-subtle ${
+                className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all animate-bounce-subtle cursor-pointer ${
                   currentRole === 'Agency'
                     ? 'bg-slate-400 text-white cursor-not-allowed opacity-80'
                     : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-900/30'
@@ -347,7 +363,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
             {content.stage === 'Script' && (
               <button
                 onClick={() => setShowNewScriptModal(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 <Plus className="w-4 h-4 text-indigo-600" />
                 <span>+ 提交新脚本版本 (Script)</span>
@@ -357,7 +373,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
             {content.stage === 'Video' && (
               <button
                 onClick={() => setShowNewVideoModal(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 <Plus className="w-4 h-4 text-purple-600" />
                 <span>+ 提交新视频版本 (Video)</span>
@@ -366,8 +382,11 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
           </div>
         </div>
 
+        {/* Content Progress Bar Pipeline (Replacing Old Contact / Owner Text Fields) */}
+        <ContentProgressBar content={content} />
+
         {/* Deadline & Key Fields Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 text-xs">
           <div>
             <span className="text-slate-400 font-medium block text-[11px]">截止日期 Deadline</span>
             <div className="font-mono font-bold text-slate-800 flex items-center gap-1 mt-0.5">
@@ -387,90 +406,139 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
               <OwnerBadge owner={content.currentOwner} />
             </div>
           </div>
-
-          <div>
-            <span className="text-slate-400 font-medium block text-[11px]">达人联系人</span>
-            <div className="font-medium text-slate-800 mt-0.5 truncate">{kol?.contact || '未填写'}</div>
-          </div>
-
-          <div>
-            <span className="text-slate-400 font-medium block text-[11px]">责任负责人</span>
-            <div className="font-medium text-slate-800 mt-0.5">{content.owner || '广汽国际'}</div>
-          </div>
         </div>
       </div>
 
       {/* Brief Card */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
+          <div className="flex items-center gap-2">
             <Send className="w-4 h-4 text-indigo-600" />
-            <span>Brief 需求与参考素材资料</span>
-          </h3>
-          {isEditingBrief ? (
+            <h3 className="text-sm font-bold text-slate-900">
+              Brief 提报方案与创作诉求 (含达人画像、素材包、投产比预估)
+            </h3>
+            {content.stage === 'Brief' && (
+              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                {content.status === 'Waiting for Brief Approval' ? '待广汽审核' : '省广草稿'}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={handleSaveBrief}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-indigo-600 text-white font-semibold text-xs hover:bg-indigo-700"
+              onClick={() => setShowAiBriefAuditModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>保存修改</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI 诊断 Brief</span>
             </button>
-          ) : (
+
             <button
-              onClick={() => setIsEditingBrief(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium"
+              onClick={() => setShowUploadBriefModal(true)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition-colors cursor-pointer"
             >
-              <Edit3 className="w-3.5 h-3.5 text-slate-400" />
-              <span>编辑 Brief</span>
+              <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+              <span>省广上传 / 完善 Brief 表格</span>
             </button>
-          )}
+
+            {content.stage === 'Brief' && currentRole === 'Me' && (
+              <button
+                onClick={() => {
+                  dataService.approveBrief(content.id, '广汽国际审核通过 Brief 方案，同意推进脚本撰写');
+                  reloadData();
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>核准通过 Brief</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {isEditingBrief ? (
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Brief 要求说明</label>
-              <textarea
-                rows={3}
-                value={briefText}
-                onChange={(e) => setBriefText(e.target.value)}
-                className="w-full p-2.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              />
+        {/* Structured Brief Display */}
+        <div className="space-y-3.5 text-xs text-slate-700">
+          {/* Row 1: Key Metrics from BriefData */}
+          {content.briefData && (
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs">
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
+                <span className="text-[10px] text-slate-400 font-semibold block">粉丝量 / 量级</span>
+                <span className="font-bold text-slate-900">
+                  {content.briefData.followersCount || '63,000'} ({content.briefData.tier || '中腰部'})
+                </span>
+              </div>
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
+                <span className="text-[10px] text-slate-400 font-semibold block">地区 / 属性</span>
+                <span className="font-bold text-slate-900 truncate block">
+                  {content.briefData.region || '俄罗斯'} · {content.briefData.accountAttribute || '车主'}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
+                <span className="text-[10px] text-slate-400 font-semibold block">合作费用预算</span>
+                <span className="font-bold font-mono text-indigo-700">
+                  ¥{content.briefData.collaborationCost !== undefined ? content.briefData.collaborationCost : 15000}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
+                <span className="text-[10px] text-slate-400 font-semibold block">投流合作</span>
+                <span className="font-bold text-slate-900">
+                  {content.briefData.adBoostCooperation || '愿意辅助投流'}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
+                <span className="text-[10px] text-slate-400 font-semibold block">预估播放 / 互动</span>
+                <span className="font-bold font-mono text-emerald-700">
+                  {content.briefData.estimatedViews || '25000+'} / {content.briefData.estimatedEngagements || '500+'}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
+                <span className="text-[10px] text-slate-400 font-semibold block">预估 CPC</span>
+                <span className="font-bold font-mono text-cyan-700">
+                  ¥{content.briefData.estimatedCpc !== undefined ? content.briefData.estimatedCpc : '0.60'}
+                </span>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Brief 云文档 / 素材链接</label>
-              <input
-                type="text"
-                value={briefUrl}
-                onChange={(e) => setBriefUrl(e.target.value)}
-                className="w-full p-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">审核特别注意与团队备注</label>
-              <textarea
-                rows={2}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full p-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3 text-xs text-slate-700">
-            <div>
-              <span className="font-bold text-slate-900 block mb-1">Brief 核心要点：</span>
-              <p className="bg-slate-50 p-3 rounded-lg border border-slate-100 leading-relaxed">
-                {content.briefText || '暂无详细 Brief 描述'}
-              </p>
-            </div>
+          )}
 
-            <div className="flex flex-wrap items-center gap-4 text-xs">
-              {content.briefUrl && (
+          {/* Row 2: Creative Direction & Hook */}
+          <div>
+            <span className="font-bold text-slate-900 block mb-1.5 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-indigo-600" />
+              创作建议与核心诉求 (Creative Direction)：
+            </span>
+            <p className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 leading-relaxed whitespace-pre-line text-slate-800">
+              {content.briefData?.creativeDirection || content.briefText || '暂无详细 Brief 描述'}
+            </p>
+          </div>
+
+          {/* Row 3: Provided Assets */}
+          {content.briefData?.providedAssets && content.briefData.providedAssets.length > 0 && (
+            <div>
+              <span className="font-bold text-slate-900 block mb-1.5 flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5 text-emerald-600" />
+                省广提供素材清单 (Materials Provided to KOL)：
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {content.briefData.providedAssets.map((asset, idx) => (
+                  <span
+                    key={idx}
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  >
+                    ✓ {asset}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Row 4: Links & Notes */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100 text-xs">
+            <div className="flex items-center gap-4 flex-wrap">
+              {(content.briefData?.briefDocUrl || content.briefUrl) && (
                 <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-slate-900">Brief 素材文档：</span>
+                  <span className="font-bold text-slate-900">Brief 云文档表格：</span>
                   <a
-                    href={content.briefUrl}
+                    href={content.briefData?.briefDocUrl || content.briefUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-indigo-600 hover:underline font-medium inline-flex items-center gap-1"
@@ -480,15 +548,22 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                 </div>
               )}
 
-              {content.notes && (
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-slate-900">审核注意事项：</span>
-                  <span className="text-slate-600">{content.notes}</span>
+              {content.briefData?.submittedBy && (
+                <div className="flex items-center gap-1 text-slate-500">
+                  <span>提报方：</span>
+                  <strong className="text-slate-700">{content.briefData.submittedBy}</strong>
+                  <span>({content.briefData.submittedAt || '已提交'})</span>
                 </div>
               )}
             </div>
+
+            {content.briefData?.reviewFeedback && (
+              <div className="text-indigo-700 font-medium bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
+                <strong>广汽审核批注：</strong> {content.briefData.reviewFeedback}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Script Version Section */}
@@ -501,19 +576,6 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setAiAuditAssetType('Script');
-                setAiAuditVersionNum(selectedScriptVer?.versionNumber || 1);
-                setAiAuditInitialSubtitles(selectedScriptVer?.scriptText || '');
-                setShowAiAuditModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold text-xs shadow-sm"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-cyan-200" />
-              <span>AI 脚本与 Brief 智能初审插件</span>
-            </button>
-
             {currentRole === 'Agency' && (
               <button
                 onClick={() => setShowNewScriptModal(true)}
@@ -560,7 +622,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
             {/* Selected Script Version Detail Block */}
             {selectedScriptVer && (
               <div className="space-y-4 animate-in fade-in duration-150">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-slate-900">{selectedScriptVer.title}</span>
                     <span className="text-slate-400 font-mono">提交于 {selectedScriptVer.submittedAt.replace('T', ' ').substring(0, 16)}</span>
@@ -570,16 +632,58 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                     {selectedScriptVer.scriptText}
                   </div>
 
+                  {/* Direct Open Document Link */}
                   {selectedScriptVer.fileUrl && (
-                    <div className="pt-1 text-xs">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-blue-950">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        <span>已附带 Word/DOCX 脚本文档附件：</span>
+                        <code className="bg-white px-2 py-0.5 rounded border border-blue-200 font-mono text-[11px] text-blue-900">
+                          {selectedScriptVer.fileUrl.split('/').pop() || selectedScriptVer.fileUrl}
+                        </code>
+                      </div>
                       <a
                         href={selectedScriptVer.fileUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-blue-600 hover:underline font-semibold inline-flex items-center gap-1"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-sm inline-flex items-center gap-1 transition-colors"
                       >
-                        下载/查看完整 Word 脚本附件 <ExternalLink className="w-3.5 h-3.5" />
+                        <span>直接打开文档</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </a>
+                    </div>
+                  )}
+
+                  {/* AI Agent Brief Audit Result Box (1, 2, 3 Points) */}
+                  {selectedScriptVer.aiAuditResult && (
+                    <div className="p-3.5 bg-gradient-to-r from-amber-50 via-orange-50/50 to-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-950">
+                      <div className="flex items-center justify-between font-bold border-b border-amber-200/80 pb-2 text-amber-900">
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-amber-600" />
+                          🤖 AI Agent 自动诊断：与 Brief 未匹配点 ({selectedScriptVer.aiAuditResult.unmatchedPoints?.length || 0}条)
+                        </span>
+                        <span className="px-2 py-0.5 bg-amber-200/80 rounded font-mono text-[10px]">
+                          Brief 契合度 {selectedScriptVer.aiAuditResult.score || 85}%
+                        </span>
+                      </div>
+
+                      {selectedScriptVer.aiAuditResult.unmatchedPoints?.length > 0 ? (
+                        <div className="space-y-1.5 pt-1">
+                          {selectedScriptVer.aiAuditResult.unmatchedPoints.map((pt: string, idx: number) => (
+                            <div key={idx} className="p-2.5 bg-white rounded-lg border border-amber-200 flex items-start gap-2.5 shadow-2xs">
+                              <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="text-xs font-medium text-amber-950 leading-relaxed">{pt}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-emerald-700 font-bold flex items-center gap-1 py-1">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>AI Agent 诊断完成：本版脚本 100% 契合 Brief 全部核心要求！</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -659,19 +763,6 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setAiAuditAssetType('Video');
-                setAiAuditVersionNum(selectedVideoVer?.versionNumber || 1);
-                setAiAuditInitialSubtitles('');
-                setShowAiAuditModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 hover:from-blue-800 hover:to-indigo-800 text-white font-bold text-xs shadow-md border border-cyan-400/30"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-cyan-300 animate-pulse" />
-              <span>AI 多语种字幕识别与 Brief 初审插件</span>
-            </button>
-
             {currentRole === 'Agency' && (
               <button
                 onClick={() => setShowNewVideoModal(true)}
@@ -811,80 +902,226 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
         )}
       </div>
 
-      {/* Post-Release Performance Data Section (发布后数据手动填充) */}
+      {/* Post-Release Performance Data Section (发布后数据手动填充与智能计算) */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <BarChart2 className="w-4 h-4 text-emerald-600" />
-            <h3 className="text-sm font-bold text-slate-900">发布后表现数据 (手动填充)</h3>
-            {content.performanceData?.publishedAt && (
-              <span className="text-xs text-slate-400 font-mono">
-                发布日期: {content.performanceData.publishedAt}
-              </span>
-            )}
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <BarChart2 className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">发布后效果数据看板 (8项核心指标与转化分析)</h3>
+                {content.performanceData && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    已归档
+                  </span>
+                )}
+              </div>
+              {content.performanceData?.publishedAt && (
+                <span className="text-xs text-slate-500 font-mono">
+                  实际上线日期: {content.performanceData.publishedAt}
+                </span>
+              )}
+            </div>
           </div>
 
-          <button
-            onClick={() => setShowPerformanceModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition-colors"
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>{content.performanceData ? '修改/更新发布数据' : '录入发布后数据'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {content.videoApprovedAt && !content.performanceData?.publishUrl && (
+              <button
+                onClick={() => setShowUploadLinkModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-semibold transition-colors"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>录入线上发布链接</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowPerformanceModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{content.performanceData ? '修改/重新计算发布数据' : '录入发布数据 (智能计算)'}</span>
+            </button>
+          </div>
         </div>
 
         {content.performanceData ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                <div className="text-slate-400 text-xs flex items-center justify-center gap-1 mb-1">
-                  <Eye className="w-3.5 h-3.5 text-blue-500" />
-                  <span>阅读/播放量</span>
-                </div>
-                <div className="text-base font-extrabold text-slate-900 font-mono">
-                  {(content.performanceData.views || 0).toLocaleString()}
-                </div>
-              </div>
+            {/* Highlights row: 互动量, 互动率 & 三秒完播率 Calculation & retention summaries */}
+            {(() => {
+              const views = content.performanceData.views || 0;
+              const threeSecondPlayRate = content.performanceData.threeSecondPlayRate;
+              const likes = content.performanceData.likes || 0;
+              const comments = content.performanceData.comments || 0;
+              const favorites = content.performanceData.favorites || 0;
+              const shares = content.performanceData.shares || 0;
+              const engagements = content.performanceData.engagements !== undefined 
+                ? content.performanceData.engagements 
+                : likes + comments + favorites + shares;
+              const engagementRate = content.performanceData.engagementRate !== undefined
+                ? content.performanceData.engagementRate
+                : views > 0 ? parseFloat(((engagements / views) * 100).toFixed(2)) : 0;
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                <div className="text-slate-400 text-xs flex items-center justify-center gap-1 mb-1">
-                  <ThumbsUp className="w-3.5 h-3.5 text-rose-500" />
-                  <span>点赞数</span>
-                </div>
-                <div className="text-base font-extrabold text-slate-900 font-mono">
-                  {(content.performanceData.likes || 0).toLocaleString()}
-                </div>
-              </div>
+              return (
+                <>
+                  {/* Highlight Calculation Banner */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* 1. 互动量总览 */}
+                    <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/80 p-4 rounded-xl border border-indigo-200/80 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                          <Activity className="w-4 h-4 text-indigo-600" />
+                          综合互动量 (Engagements)
+                        </span>
+                        <span className="text-[10px] font-mono text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded font-bold">
+                          四项加和
+                        </span>
+                      </div>
+                      <div className="text-2xl font-extrabold text-indigo-950 font-mono">
+                        {engagements.toLocaleString()}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono truncate">
+                        计算公式: 点赞 + 评论 + 收藏 + 转发
+                      </div>
+                    </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                <div className="text-slate-400 text-xs flex items-center justify-center gap-1 mb-1">
-                  <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
-                  <span>评论数</span>
-                </div>
-                <div className="text-base font-extrabold text-slate-900 font-mono">
-                  {(content.performanceData.comments || 0).toLocaleString()}
-                </div>
-              </div>
+                    {/* 2. 互动率总览 */}
+                    <div className="bg-gradient-to-br from-emerald-50/80 to-teal-50/80 p-4 rounded-xl border border-emerald-200/80 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                          <Percent className="w-4 h-4 text-emerald-600" />
+                          综合互动率 (Eng. Rate)
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-bold">
+                          互动量 ÷ 播放量
+                        </span>
+                      </div>
+                      <div className="text-2xl font-extrabold text-emerald-800 font-mono flex items-center gap-2">
+                        <span>{engagementRate}%</span>
+                        {engagementRate >= 5 && (
+                          <span className="text-[10px] font-sans px-2 py-0.5 bg-emerald-200 text-emerald-900 rounded-full font-bold">
+                            优质转化
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono truncate">
+                        公式: {engagements.toLocaleString()} ÷ {views.toLocaleString()} × 100%
+                      </div>
+                    </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                <div className="text-slate-400 text-xs flex items-center justify-center gap-1 mb-1">
-                  <Share2 className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>分享/转发</span>
-                </div>
-                <div className="text-base font-extrabold text-slate-900 font-mono">
-                  {(content.performanceData.shares || 0).toLocaleString()}
-                </div>
-              </div>
-            </div>
+                    {/* 3. 三秒完播率总览 */}
+                    <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/80 p-4 rounded-xl border border-amber-200/80 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                          <Timer className="w-4 h-4 text-amber-600" />
+                          三秒完播率 (3s Rate)
+                        </span>
+                        <span className="text-[10px] font-mono text-amber-800 bg-amber-100 px-2 py-0.5 rounded font-bold">
+                          黄金3秒留存
+                        </span>
+                      </div>
+                      <div className="text-2xl font-extrabold text-amber-900 font-mono flex items-center gap-2">
+                        <span>{threeSecondPlayRate !== undefined ? `${threeSecondPlayRate}%` : '未录入'}</span>
+                        {threeSecondPlayRate !== undefined && threeSecondPlayRate >= 40 && (
+                          <span className="text-[10px] font-sans px-2 py-0.5 bg-amber-200 text-amber-950 rounded-full font-bold flex items-center gap-0.5">
+                            <Zap className="w-2.5 h-2.5" />
+                            高吸睛
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono truncate">
+                        {threeSecondPlayRate !== undefined 
+                          ? (threeSecondPlayRate >= 40 ? '前3s极具吸睛力与停留价值' : '前3s留存表现平稳')
+                          : '短视频平台黄金前3秒注意力捕获率'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 6 Detailed Metric Breakdown Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    {/* 1. 播放量 */}
+                    <div className="bg-blue-50/40 p-3 rounded-xl border border-blue-100 text-center">
+                      <div className="text-slate-500 text-xs flex items-center justify-center gap-1 mb-1 font-semibold">
+                        <Eye className="w-3.5 h-3.5 text-blue-600" />
+                        <span>播放/阅读量</span>
+                      </div>
+                      <div className="text-base font-extrabold text-blue-950 font-mono">
+                        {views.toLocaleString()}
+                      </div>
+                    </div>
+
+                    {/* 2. 三秒完播率 */}
+                    <div className="bg-amber-50/40 p-3 rounded-xl border border-amber-100 text-center">
+                      <div className="text-slate-500 text-xs flex items-center justify-center gap-1 mb-1 font-semibold">
+                        <Timer className="w-3.5 h-3.5 text-amber-600" />
+                        <span>三秒完播率</span>
+                      </div>
+                      <div className="text-base font-extrabold text-amber-950 font-mono">
+                        {threeSecondPlayRate !== undefined ? `${threeSecondPlayRate}%` : '--'}
+                      </div>
+                    </div>
+
+                    {/* 3. 点赞量 */}
+                    <div className="bg-rose-50/40 p-3 rounded-xl border border-rose-100 text-center">
+                      <div className="text-slate-500 text-xs flex items-center justify-center gap-1 mb-1 font-semibold">
+                        <ThumbsUp className="w-3.5 h-3.5 text-rose-600" />
+                        <span>点赞数</span>
+                      </div>
+                      <div className="text-base font-extrabold text-rose-950 font-mono">
+                        {likes.toLocaleString()}
+                      </div>
+                    </div>
+
+                    {/* 4. 评论量 */}
+                    <div className="bg-amber-50/40 p-3 rounded-xl border border-amber-100 text-center">
+                      <div className="text-slate-500 text-xs flex items-center justify-center gap-1 mb-1 font-semibold">
+                        <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
+                        <span>评论数</span>
+                      </div>
+                      <div className="text-base font-extrabold text-amber-950 font-mono">
+                        {comments.toLocaleString()}
+                      </div>
+                    </div>
+
+                    {/* 5. 收藏量 */}
+                    <div className="bg-purple-50/40 p-3 rounded-xl border border-purple-100 text-center">
+                      <div className="text-slate-500 text-xs flex items-center justify-center gap-1 mb-1 font-semibold">
+                        <Bookmark className="w-3.5 h-3.5 text-purple-600" />
+                        <span>收藏量</span>
+                      </div>
+                      <div className="text-base font-extrabold text-purple-950 font-mono">
+                        {favorites.toLocaleString()}
+                      </div>
+                    </div>
+
+                    {/* 6. 转发量 */}
+                    <div className="bg-emerald-50/40 p-3 rounded-xl border border-emerald-100 text-center">
+                      <div className="text-slate-500 text-xs flex items-center justify-center gap-1 mb-1 font-semibold">
+                        <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>分享/转发</span>
+                      </div>
+                      <div className="text-base font-extrabold text-emerald-950 font-mono">
+                        {shares.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
 
             {content.performanceData.publishUrl && (
-              <div className="text-xs bg-emerald-50/50 p-3 rounded-lg border border-emerald-100 flex items-center justify-between">
-                <span className="font-semibold text-emerald-900">线上发布链接：</span>
+              <div className="text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <ExternalLink className="w-3.5 h-3.5 text-indigo-600" />
+                  线上视频公开链接：
+                </span>
                 <a
                   href={content.performanceData.publishUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-emerald-700 hover:underline font-bold inline-flex items-center gap-1 truncate max-w-md"
+                  className="text-indigo-600 hover:text-indigo-800 hover:underline font-mono font-bold inline-flex items-center gap-1 truncate max-w-md text-xs"
                 >
                   {content.performanceData.publishUrl} <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                 </a>
@@ -892,8 +1129,19 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
             )}
           </div>
         ) : (
-          <div className="p-4 text-center text-xs text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-            内容核准发布后，可点击右上角“录入发布后数据”手动补充各平台的展现与互动效果。
+          <div className="p-6 text-center text-xs text-slate-500 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 space-y-2">
+            <BarChart2 className="w-8 h-8 mx-auto text-slate-400" />
+            <p className="font-semibold text-slate-700">暂未录入发布后效果数据</p>
+            <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+              视频在 Tiktok / Instagram / Youtube / Facebook 等平台公开发布 3 天后，省广团队将收到首页弹窗提醒，可在此补充录入播放量、点赞量、评论量、收藏量、转发量等核心指标。
+            </p>
+            <button
+              onClick={() => setShowPerformanceModal(true)}
+              className="mt-2 inline-flex items-center gap-1 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>立即录入数据 (支持自动计算)</span>
+            </button>
           </div>
         )}
       </div>
@@ -975,21 +1223,27 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
         onSuccess={reloadData}
       />
 
-      <AiSubtitleAuditModal
-        isOpen={showAiAuditModal}
-        content={content}
-        campaign={campaign}
-        assetType={aiAuditAssetType}
-        versionNumber={aiAuditVersionNum}
-        initialSubtitles={aiAuditInitialSubtitles}
-        onClose={() => setShowAiAuditModal(false)}
-        onApplyReviewDraft={(draftText) => {
-          if (content.status === 'Waiting for Agency Review') {
-            setShowAgencyModal(true);
-          } else if (content.status === 'Waiting for My Review') {
-            setShowMyReviewModal(true);
-          }
-        }}
+      <IntegratedReviewWorkbenchModal
+        isOpen={showIntegratedWorkbench}
+        contentId={contentId}
+        assetType={workbenchAssetType}
+        reviewerRole={currentRole}
+        onClose={() => setShowIntegratedWorkbench(false)}
+        onSuccess={reloadData}
+      />
+
+      <UploadBriefModal
+        isOpen={showUploadBriefModal}
+        content={content || null}
+        onClose={() => setShowUploadBriefModal(false)}
+        onSuccess={reloadData}
+      />
+
+      <AiBriefAuditModal
+        isOpen={showAiBriefAuditModal}
+        content={content || null}
+        onClose={() => setShowAiBriefAuditModal(false)}
+        onApproveSuccess={reloadData}
       />
     </div>
   );
