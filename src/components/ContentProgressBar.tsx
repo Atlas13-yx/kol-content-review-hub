@@ -21,12 +21,55 @@ export const getContentStepNumber = (cnt: ContentItem): number => {
     return 4; // 视频审核
   }
   if (cnt.stage === 'Script' || cnt.status.includes('Script') || cnt.status.includes('Agency Review') || cnt.status.includes('My Review')) {
+    // If it's direct post, it shouldn't normally be in script stage, but if it is, return 3
     return 3; // 脚本审核
   }
   if (cnt.stage === 'Brief' || cnt.status.includes('Brief') || cnt.status === 'Waiting for KOL Script') {
     return 2; // Brief 审核与需求
   }
   return 1; // 达人筛选阶段
+};
+
+export const getStepDefinitionsForContent = (cnt?: ContentItem) => {
+  const isDirectPost = cnt?.category === '直发';
+  return [
+    {
+      num: 1,
+      title: '1. 达人筛选',
+      short: '达人筛选',
+      sub: '人选匹配与初筛确认',
+      icon: UserCheck,
+    },
+    {
+      num: 2,
+      title: '2. Brief 审核',
+      short: 'Brief 审核',
+      sub: isDirectPost ? '素材确认与下发' : '卖点核准与签署',
+      icon: Send,
+    },
+    {
+      num: 3,
+      title: isDirectPost ? '3. 脚本阶段 (免脚本)' : '3. 脚本审核',
+      short: isDirectPost ? '免脚本(直通)' : '脚本审核',
+      sub: isDirectPost ? '直发类型无需脚本' : '省广初审与广汽裁决',
+      icon: FileText,
+      isSkippedForDirect: isDirectPost,
+    },
+    {
+      num: 4,
+      title: '4. 视频审核',
+      short: '视频审核',
+      sub: '成片初审与终审裁决',
+      icon: Video,
+    },
+    {
+      num: 5,
+      title: '5. 发布上线',
+      short: '发布上线',
+      sub: '链接归档与数据分析',
+      icon: Flag,
+    },
+  ];
 };
 
 export const STEP_DEFINITIONS = [
@@ -69,6 +112,7 @@ export const STEP_DEFINITIONS = [
 
 export const ContentProgressBar: React.FC<ContentProgressBarProps> = ({ content }) => {
   const currentStep = getContentStepNumber(content);
+  const stepDefs = getStepDefinitionsForContent(content);
 
   const getStepStatus = (stepNum: number) => {
     if (stepNum < currentStep) return 'completed';
@@ -81,10 +125,17 @@ export const ContentProgressBar: React.FC<ContentProgressBarProps> = ({ content 
       <div className="flex items-center justify-between text-xs font-bold text-slate-800">
         <span className="flex items-center gap-1.5 text-slate-900">
           <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-          <span>Content 履约进度流程 (阶段 {currentStep}/5)</span>
+          <span>
+            Content 履约进度流程 (阶段 {currentStep}/5)
+            {content.category === '直发' && (
+              <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
+                直发类型 (免脚本)
+              </span>
+            )}
+          </span>
         </span>
         <span className="text-[11px] font-mono font-semibold text-slate-500">
-          {currentStep === 5 ? '已达到发布与数据阶段' : `当前阶段：${STEP_DEFINITIONS[currentStep - 1].title}`}
+          {currentStep === 5 ? '已达到发布与数据阶段' : `当前阶段：${stepDefs[currentStep - 1].title}`}
         </span>
       </div>
 
@@ -103,7 +154,7 @@ export const ContentProgressBar: React.FC<ContentProgressBarProps> = ({ content 
 
         {/* Step Circles Grid */}
         <div className="relative z-10 grid grid-cols-5 gap-2 text-center">
-          {STEP_DEFINITIONS.map((st) => {
+          {stepDefs.map((st) => {
             const status = getStepStatus(st.num);
             const Icon = st.icon;
 
@@ -119,6 +170,10 @@ export const ContentProgressBar: React.FC<ContentProgressBarProps> = ({ content 
               circleBg = 'bg-blue-600 border-2 border-blue-700 text-white shadow-md shadow-blue-500/20 ring-4 ring-blue-100';
               titleColor = 'text-blue-700 font-extrabold';
               subColor = 'text-blue-600';
+            } else if (st.isSkippedForDirect) {
+              circleBg = 'bg-slate-100 border-2 border-dashed border-slate-300 text-slate-400';
+              titleColor = 'text-slate-400 italic';
+              subColor = 'text-slate-400';
             }
 
             return (
@@ -150,6 +205,7 @@ export const ContentProgressBar: React.FC<ContentProgressBarProps> = ({ content 
 // Compact Inline Version specifically designed for table lists
 export const ContentInlineProgressBar: React.FC<{ content: ContentItem }> = ({ content }) => {
   const currentStep = getContentStepNumber(content);
+  const stepDefs = getStepDefinitionsForContent(content);
 
   const getStepStatus = (stepNum: number) => {
     if (stepNum < currentStep) return 'completed';
@@ -168,8 +224,13 @@ export const ContentInlineProgressBar: React.FC<{ content: ContentItem }> = ({ c
             }`}
           />
           <span className="text-[11px] font-bold text-slate-800">
-            阶段 {currentStep}/5: {STEP_DEFINITIONS[currentStep - 1].short}
+            阶段 {currentStep}/5: {stepDefs[currentStep - 1].short}
           </span>
+          {content.category === '直发' && (
+            <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+              直发
+            </span>
+          )}
         </div>
         <span className="text-[10px] font-mono text-slate-400">
           {Math.round((currentStep / 5) * 100)}%
@@ -189,7 +250,7 @@ export const ContentInlineProgressBar: React.FC<{ content: ContentItem }> = ({ c
           }}
         />
 
-        {STEP_DEFINITIONS.map((st) => {
+        {stepDefs.map((st) => {
           const status = getStepStatus(st.num);
 
           let nodeStyle = 'bg-white border border-slate-300 text-slate-400';
@@ -197,6 +258,8 @@ export const ContentInlineProgressBar: React.FC<{ content: ContentItem }> = ({ c
             nodeStyle = 'bg-emerald-600 border border-emerald-600 text-white shadow-2xs';
           } else if (status === 'current') {
             nodeStyle = 'bg-blue-600 border border-blue-600 text-white ring-2 ring-blue-100 shadow-sm';
+          } else if (st.isSkippedForDirect) {
+            nodeStyle = 'bg-slate-100 border border-dashed border-slate-300 text-slate-400';
           }
 
           return (

@@ -101,28 +101,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           id: 'kol-selection',
-          label: '达人筛选',
+          label: '1. 达人筛选',
           icon: UserCheck,
           badge: counts.kolSelection,
           badgeColor: 'bg-amber-100 text-amber-800 font-bold',
         },
         {
           id: 'brief-review',
-          label: 'Brief 审核',
+          label: '2. Brief 审核',
           icon: FileCheck,
           badge: counts.brief,
           badgeColor: 'bg-blue-100 text-blue-800 font-bold',
         },
         {
           id: 'script-review',
-          label: '脚本审核',
+          label: '3. 脚本审核',
           icon: FileText,
           badge: counts.script,
           badgeColor: 'bg-indigo-100 text-indigo-800 font-bold',
         },
         {
           id: 'video-review',
-          label: '视频审核',
+          label: '4. 视频审核',
           icon: Video,
           badge: counts.video,
           badgeColor: 'bg-purple-100 text-purple-800 font-bold',

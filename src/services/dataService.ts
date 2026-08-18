@@ -20,6 +20,7 @@ import {
   KolSelectionBatchStatus,
   SystemNotification,
   NotificationType,
+  InitiationCandidate,
 } from '../types';
 import {
   INITIAL_CAMPAIGNS,
@@ -874,7 +875,7 @@ class DataService {
   public addContent(data: Omit<ContentItem, 'id' | 'createdAt' | 'updatedAt'>): ContentItem {
     const newContent: ContentItem = {
       ...data,
-      id: `cnt-${Date.now()}`,
+      id: `cnt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -884,7 +885,7 @@ class DataService {
       contentId: newContent.id,
       title: '创建 Content 任务',
       description: `新建了内容任务《${newContent.title}》，并初始化为 ${newContent.stage} 阶段`,
-      actor: 'Me',
+      actor: this.currentRole === 'Me' ? 'Me' : 'Agency',
       type: 'brief',
     });
 
@@ -900,6 +901,123 @@ class DataService {
 
     return newContent;
   }
+
+  /**
+   * 批量立项：接收 AI 解析或人工确认的候选任务列表并批量生成 ContentItem
+   * 双方（广汽国际 Me & 省广代理商 Agency）均可发起立项
+   */
+  public batchAddContents(
+    candidates: InitiationCandidate[],
+    initiatedBy: UserRole = this.currentRole
+  ): ContentItem[] {
+    const createdContents: ContentItem[] = [];
+
+    candidates.forEach((cand, idx) => {
+      // 1. Ensure KOL exists
+      let kol = this.getKolById(cand.kolId);
+      if (!kol) {
+        kol = this.findOrCreateKolByName({
+          name: cand.kolName,
+          platform: cand.platform,
+          followers: cand.followers,
+          profileUrl: cand.socialMediaUrl || '',
+          tags: cand.category === '直发' ? ['直发达人', '批量立项'] : ['批量立项', '初筛入库'],
+          category: cand.category === '二创' ? '二创达人' : '出海创作者',
+        });
+      }
+
+      // 2. Stage & Status determination
+      const isDirect = cand.category === '直发';
+      const stage: Stage = isDirect ? 'Video' : 'Brief';
+      const status: Status = isDirect ? 'Waiting for KOL Video' : 'Brief Draft';
+      const currentOwner: CurrentOwner = isDirect ? 'KOL' : 'Agency';
+
+      const newContent: ContentItem = {
+        id: `cnt-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+        campaignId: cand.campaignId,
+        kolId: kol.id,
+        title: cand.title,
+        topic: cand.topic || '海外品牌实测与传播',
+        platform: cand.platform,
+        category: cand.category,
+        stage,
+        status,
+        currentOwner,
+        owner: initiatedBy === 'Me' ? '广汽国际 (Me)' : '省广代理商 (Agency)',
+        deadline: cand.deadline,
+        briefText: cand.creativeDirection,
+        briefUrl: cand.socialMediaUrl || '',
+        briefData: {
+          category: cand.category,
+          creativeDirection: cand.creativeDirection,
+          followersCount: cand.followers,
+          region: cand.region,
+          tier: cand.tier,
+          socialMediaUrl: cand.socialMediaUrl,
+          resourceType: cand.resourceType,
+          videoOrLive: cand.videoOrLive,
+          feedback: cand.feedback,
+          audiencePersona: cand.audiencePersona,
+          canTeaserVideo: cand.canTeaserVideo,
+          canTestimonial: cand.canTestimonial,
+          portraitAuthDuration: cand.portraitAuthDuration,
+          canSecondaryCreation: cand.canSecondaryCreation,
+          canProvideRawFootage: cand.canProvideRawFootage,
+          canPinLinkOrMention: cand.canPinLinkOrMention,
+          canProvideAdCode: cand.canProvideAdCode,
+          remarks: cand.notes,
+          avgViews: cand.avgViews,
+          collaborationCost: cand.collaborationCost,
+          submittedBy: initiatedBy === 'Me' ? '广汽国际 GAC' : '省广集团 GIMC',
+          submittedAt: new Date().toISOString(),
+        },
+        notes: `由【${initiatedBy === 'Me' ? '广汽国际' : '省广代理商'}】通过 AI 表格识别智能立项生成`,
+        initiatedBy,
+        initiatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      this.contents.unshift(newContent);
+      createdContents.push(newContent);
+
+      this.addTimelineEvent({
+        contentId: newContent.id,
+        title: `达人立项成功 (${cand.category})`,
+        description: `【${initiatedBy === 'Me' ? '广汽国际' : '省广代理商'}】完成该任务立项，合作类型为【${cand.category}】${
+          isDirect ? '，已自动跳过分镜脚本环节，直通视频成片审核' : '，进入 Brief 阶段待完善与签署'
+        }`,
+        actor: initiatedBy === 'Me' ? 'Me' : 'Agency',
+        type: 'brief',
+      });
+    });
+
+    this.saveToStorage();
+
+    // Notify the other party
+    const recipientRole: UserRole = initiatedBy === 'Me' ? 'Agency' : 'Me';
+    const initiatorName = initiatedBy === 'Me' ? '广汽国际 (Me)' : '省广代理商 (Agency)';
+    this.addNotification({
+      type: 'kol_selection',
+      title: `【达人批量立项通知】已成功立项 ${createdContents.length} 条任务`,
+      message: `${initiatorName} 已完成 ${createdContents.length} 条海外达人内容立项（包含原创、二创与直发），请在“达人立项”或“Brief 审核”中心查看跟进。`,
+      recipientRole,
+      targetPage: 'brief-review',
+      highlight: true,
+    });
+
+    // Sync to server
+    createdContents.forEach((c) => {
+      fetch('/api/contents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(c),
+      }).catch(() => {});
+    });
+
+    return createdContents;
+  }
+
 
   public updateContent(content: ContentItem) {
     const index = this.contents.findIndex((c) => c.id === content.id);
@@ -1111,9 +1229,16 @@ class DataService {
       }
     }
 
-    content.stage = 'Script';
-    content.status = 'Waiting for KOL Script';
-    content.currentOwner = 'KOL';
+    const isDirectPost = content.category === '直发';
+    if (isDirectPost) {
+      content.stage = 'Video';
+      content.status = 'Waiting for KOL Video';
+      content.currentOwner = 'KOL';
+    } else {
+      content.stage = 'Script';
+      content.status = 'Waiting for KOL Script';
+      content.currentOwner = 'KOL';
+    }
     content.updatedAt = new Date().toISOString();
     if (feedbackNotes) {
       content.notes = `广汽国际 Brief 审核通过批注：${feedbackNotes}`;
@@ -1122,19 +1247,23 @@ class DataService {
     this.addTimelineEvent({
       contentId,
       title: '广汽国际核准 Brief (Brief Approved)',
-      description: `广汽国际审核通过该 Brief 方案！阶段正式推进至【Script 脚本创作】（状态：Waiting for KOL Script）。${feedbackNotes ? `批注：${feedbackNotes}` : ''}`,
+      description: isDirectPost
+        ? `广汽国际审核通过该直发 Brief 方案！免分镜脚本，阶段直接推进至【Video 视频阶段】。${feedbackNotes ? `批注：${feedbackNotes}` : ''}`
+        : `广汽国际审核通过该 Brief 方案！阶段正式推进至【Script 脚本创作】（状态：Waiting for KOL Script）。${feedbackNotes ? `批注：${feedbackNotes}` : ''}`,
       actor,
       type: 'approved',
     });
 
     this.addNotification({
       type: 'stage_handover',
-      title: '【Brief 审核通过】已推进至脚本创作阶段',
-      message: `广汽国际已审核通过《${content.title}》Brief，请省广跟进达人撰写初稿脚本。`,
+      title: isDirectPost ? '【直发 Brief 审核通过】直通视频阶段' : '【Brief 审核通过】已推进至脚本创作阶段',
+      message: isDirectPost
+        ? `广汽国际已审核通过《${content.title}》直发 Brief，免脚本直通视频阶段，请跟进达人排期交付。`
+        : `广汽国际已审核通过《${content.title}》Brief，请省广跟进达人撰写初稿脚本。`,
       recipientRole: 'Agency',
       relatedId: contentId,
-      relatedType: 'script',
-      targetPage: 'script-review',
+      relatedType: isDirectPost ? 'video' : 'script',
+      targetPage: isDirectPost ? 'video-review' : 'script-review',
       targetParams: { id: contentId },
       highlight: true,
     });
@@ -1543,7 +1672,13 @@ class DataService {
   }
 
   // 5. Add New Video Version
-  public addNewVideoVersion(contentId: string, videoUrl: string, fileUrl?: string): VideoVersion {
+  public addNewVideoVersion(
+    contentId: string,
+    videoUrl: string,
+    fileUrl?: string,
+    coverUrl?: string,
+    coverFileName?: string
+  ): VideoVersion {
     const content = this.getContentById(contentId);
     const existingVersions = this.getVideoVersions(contentId);
     const nextVerNum = existingVersions.length > 0 ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1 : 1;
@@ -1554,6 +1689,9 @@ class DataService {
       versionNumber: nextVerNum,
       videoUrl,
       fileUrl,
+      coverUrl,
+      coverFileName,
+      coverSubmittedAt: coverUrl ? new Date().toISOString() : undefined,
       submittedAt: new Date().toISOString(),
       status: 'Submitted',
       createdAt: new Date().toISOString(),
@@ -1565,12 +1703,15 @@ class DataService {
       content.stage = 'Video';
       content.status = 'Waiting for Agency Review';
       content.currentOwner = 'Agency';
+      if (coverUrl) {
+        content.coverUrl = coverUrl;
+      }
       content.updatedAt = new Date().toISOString();
 
       this.addTimelineEvent({
         contentId,
-        title: `提交 Video V${nextVerNum}`,
-        description: `达人提交了新版视频 Video V${nextVerNum}，进入省广初审流程`,
+        title: `提交 Video V${nextVerNum}${coverUrl ? ' (含封面)' : ''}`,
+        description: `达人提交了新版视频 Video V${nextVerNum}${coverUrl ? '及独立定制封面图' : ''}，进入省广初审流程`,
         actor: 'KOL',
         type: 'video_sub',
       });
@@ -1578,7 +1719,7 @@ class DataService {
       this.addNotification({
         type: 'stage_handover',
         title: '【视频样片已提交】等待省广初审',
-        message: `《${content.title}》已提交 Video V${nextVerNum}，请省广进行初审与多语种字幕校验。`,
+        message: `《${content.title}》已提交 Video V${nextVerNum}${coverUrl ? '（附专属封面）' : ''}，请省广进行初审与多语种字幕校验。`,
         recipientRole: 'Agency',
         relatedId: contentId,
         relatedType: 'video',
@@ -1593,7 +1734,7 @@ class DataService {
     fetch('/api/video-versions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contentId, videoUrl, fileUrl }),
+      body: JSON.stringify({ contentId, videoUrl, fileUrl, coverUrl, coverFileName }),
     })
       .then(() => this.fetchServerData())
       .catch(() => {});
@@ -1601,12 +1742,51 @@ class DataService {
     return newVer;
   }
 
+  // Update or submit video cover for a video version
+  public updateVideoCover(
+    contentId: string,
+    versionId: string,
+    coverUrl: string,
+    coverFileName?: string,
+    coverRemarks?: string
+  ): boolean {
+    const version = this.videoVersions.find((v) => v.id === versionId || (v.contentId === contentId && !versionId));
+    const content = this.getContentById(contentId);
+
+    if (version) {
+      version.coverUrl = coverUrl;
+      version.coverFileName = coverFileName || version.coverFileName || 'video_cover.jpg';
+      version.coverSubmittedAt = new Date().toISOString();
+      if (coverRemarks !== undefined) {
+        version.coverRemarks = coverRemarks;
+      }
+    }
+
+    if (content) {
+      content.coverUrl = coverUrl;
+      content.updatedAt = new Date().toISOString();
+
+      this.addTimelineEvent({
+        contentId,
+        title: coverUrl ? '提交/更新视频封面图' : '移除视频封面图',
+        description: coverUrl
+          ? `已成功上传并更新视频定制封面图（可选项）${coverFileName ? `：${coverFileName}` : ''}`
+          : '已移除定制封面图，恢复默认截取视频首帧',
+        actor: this.currentRole === 'Me' ? 'Me' : 'Agency',
+        type: 'video_sub',
+      });
+    }
+
+    this.saveToStorage();
+    return true;
+  }
+
   public addScriptVersion(contentId: string, title: string, scriptText: string, fileUrl?: string): ScriptVersion {
     return this.addNewScriptVersion(contentId, title, scriptText, fileUrl);
   }
 
-  public addVideoVersion(contentId: string, videoUrl: string, fileUrl?: string): VideoVersion {
-    return this.addNewVideoVersion(contentId, videoUrl, fileUrl);
+  public addVideoVersion(contentId: string, videoUrl: string, fileUrl?: string, coverUrl?: string, coverFileName?: string): VideoVersion {
+    return this.addNewVideoVersion(contentId, videoUrl, fileUrl, coverUrl, coverFileName);
   }
 
   // 6. Mark Content Completed

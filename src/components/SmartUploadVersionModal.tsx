@@ -11,6 +11,8 @@ import {
   ArrowRight,
   UserCheck,
   FolderSync,
+  Image as ImageIcon,
+  Upload,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { ContentItem, KOL, Campaign, AssetType } from '../types';
@@ -39,6 +41,8 @@ export const SmartUploadVersionModal: React.FC<SmartUploadVersionModalProps> = (
   const [scriptText, setScriptText] = useState('');
   const [fileUrl, setFileUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [coverFileName, setCoverFileName] = useState('');
   const [fileName, setFileName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [archiveSuccessInfo, setArchiveSuccessInfo] = useState<{
@@ -76,6 +80,8 @@ export const SmartUploadVersionModal: React.FC<SmartUploadVersionModalProps> = (
       setScriptText('');
       setFileUrl('');
       setVideoUrl('');
+      setCoverUrl('');
+      setCoverFileName('');
       setFileName('');
       setIsSubmitting(false);
     }
@@ -247,7 +253,9 @@ export const SmartUploadVersionModal: React.FC<SmartUploadVersionModalProps> = (
         const newVv = dataService.addVideoVersion(
           targetContent.id,
           url,
-          fileUrl || 'https://storage.gac-international.com/videos/v2_preview.mp4'
+          fileUrl || 'https://storage.gac-international.com/videos/v2_preview.mp4',
+          coverUrl.trim() || undefined,
+          coverFileName.trim() || undefined
         );
         createdVerNum = newVv.versionNumber;
       }
@@ -621,18 +629,71 @@ export const SmartUploadVersionModal: React.FC<SmartUploadVersionModalProps> = (
                   />
                 </div>
               ) : (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                    <Link className="w-3.5 h-3.5 text-slate-400" />
-                    视频在线播放 / 审片网盘链接 (Video URL)
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="https://drive.google.com/... 或 腾讯微云/网盘链接/MP4直链"
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  />
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                      <Link className="w-3.5 h-3.5 text-slate-400" />
+                      视频在线播放 / 审片网盘链接 (Video URL) *
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://drive.google.com/... 或 腾讯微云/网盘链接/MP4直链"
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Optional Video Cover Input */}
+                  <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 text-purple-600" />
+                        <span>视频封面图 Video Cover (可选项)</span>
+                      </label>
+                      <span className="text-[10px] text-purple-700 font-medium">
+                        未上传将默认截取视频首帧
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="flex-1 py-2 px-3 bg-white hover:bg-purple-50 border border-slate-300 hover:border-purple-300 rounded-lg text-xs font-semibold text-slate-700 flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-2xs">
+                        <Upload className="w-3.5 h-3.5 text-purple-600" />
+                        <span className="truncate">{coverFileName ? `已选: ${coverFileName}` : '上传封面图 (JPG/PNG)'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              setCoverFileName(f.name);
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                if (ev.target?.result) setCoverUrl(ev.target.result as string);
+                              };
+                              reader.readAsDataURL(f);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <input
+                        type="url"
+                        placeholder="或贴入封面图外链 URL..."
+                        value={coverUrl}
+                        onChange={(e) => setCoverUrl(e.target.value)}
+                        className="flex-1 px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {coverUrl && (
+                      <div className="flex items-center gap-2.5 p-2 bg-white rounded-lg border border-purple-200">
+                        <img src={coverUrl} alt="封面预览" className="w-14 h-9 object-cover rounded border border-slate-200 shrink-0" />
+                        <span className="text-xs text-purple-900 truncate font-medium">{coverFileName || '自定义封面预览已就绪'}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

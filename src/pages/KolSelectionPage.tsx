@@ -28,11 +28,13 @@ import {
   FileCheck,
   ArrowLeftRight,
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  FileDown
 } from 'lucide-react';
 import { ContentInlineProgressBar } from '../components/ContentProgressBar';
 import { UploadKolSelectionModal } from '../components/UploadKolSelectionModal';
 import { ReviewKolSelectionModal } from '../components/ReviewKolSelectionModal';
+import { downloadStandardBriefExcelTemplate } from '../utils/excelTemplate';
 
 interface KolSelectionPageProps {
   onNavigate: (page: string, params?: { id?: string }) => void;
@@ -188,6 +190,17 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
             </span>
           </div>
 
+          {/* Download Standard Excel Template Button */}
+          <button
+            type="button"
+            onClick={downloadStandardBriefExcelTemplate}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200/90 shadow-2xs transition-all cursor-pointer"
+            title="下载广汽国际标准达人筛选与合作权益表格 (.xlsx)"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>下载标准表格 (.xlsx)</span>
+          </button>
+
           {/* Primary Action Button: Agency uploads table, GAC reviews table */}
           {currentRole === 'Agency' ? (
             <button
@@ -215,6 +228,17 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
               </span>
             </button>
           )}
+
+          {/* Direct link to next stage: Brief Review */}
+          <button
+            type="button"
+            onClick={() => onNavigate('brief-review')}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-all cursor-pointer"
+          >
+            <Layers className="w-3.5 h-3.5 text-indigo-600" />
+            <span>进入 Brief 审核 (第2阶段)</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          </button>
 
           {/* Fallback upload for Me (e.g. testing) */}
           {currentRole === 'Me' && (

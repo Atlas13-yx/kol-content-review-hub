@@ -19,6 +19,7 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
   const [isSmartUploadOpen, setIsSmartUploadOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [campaignFilter, setCampaignFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -53,6 +54,7 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
     }
 
     if (campaignFilter && c.campaignId !== campaignFilter) return false;
+    if (categoryFilter && (c.category || '原创') !== categoryFilter) return false;
     if (stageFilter && c.stage !== stageFilter) return false;
     if (statusFilter && c.status !== statusFilter) return false;
     if (ownerFilter && c.currentOwner !== ownerFilter) return false;
@@ -65,6 +67,7 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
   const clearFilters = () => {
     setSearch('');
     setCampaignFilter('');
+    setCategoryFilter('');
     setStageFilter('');
     setStatusFilter('');
     setOwnerFilter('');
@@ -147,6 +150,20 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
                   {c.name}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Category 类型 (原创 / 二创 / 直发) */}
+          <div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium text-slate-800"
+            >
+              <option value="">所有内容类型 (全部)</option>
+              <option value="原创">原创 (Brief→脚本→视频)</option>
+              <option value="二创">二创 (Brief→脚本→视频)</option>
+              <option value="直发">直发 (达人筛选→直通视频审核)</option>
             </select>
           </div>
 
@@ -234,6 +251,7 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
             <thead className="bg-slate-100/80 text-slate-600 font-semibold border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3.5">KOL 达人</th>
+                <th className="px-4 py-3.5">类型</th>
                 <th className="px-4 py-3.5">Campaign</th>
                 <th className="px-4 py-3.5 min-w-[240px]">履约进度 (4阶段流程)</th>
                 <th className="px-4 py-3.5">平台</th>
@@ -249,6 +267,7 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
               {filteredContents.map((item) => {
                 const overdue = isOverdue(item.deadline, item.stage);
                 const verLabel = getCurrentVersionLabel(item);
+                const cat = item.category || (item.id.endsWith('1') ? '原创' : '二创');
 
                 return (
                   <tr
@@ -260,6 +279,17 @@ export const ContentsPage: React.FC<ContentsPageProps> = ({ onNavigate, onOpenNe
                   >
                     <td className="px-4 py-3.5 font-bold text-slate-900 whitespace-nowrap">
                       {getKolName(item.kolId)}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        cat === '原创'
+                          ? 'bg-indigo-100 text-indigo-800'
+                          : cat === '二创'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {cat}
+                      </span>
                     </td>
                     <td className="px-4 py-3.5 text-slate-600 max-w-[140px] truncate" title={getCampaignName(item.campaignId)}>
                       {getCampaignName(item.campaignId)}

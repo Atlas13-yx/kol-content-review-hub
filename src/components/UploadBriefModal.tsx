@@ -47,13 +47,26 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
   const [followersCount, setFollowersCount] = useState('');
   const [tier, setTier] = useState('中腰部');
   const [region, setRegion] = useState('俄罗斯');
-  const [accountAttribute, setAccountAttribute] = useState('个人创作者 / 车主');
   const [accountCategory, setAccountCategory] = useState('汽车');
   const [category, setCategory] = useState<ContentCategory>('二创');
   const [avgViews, setAvgViews] = useState<string | number>('550000');
   const [avgEngagements, setAvgEngagements] = useState<string | number>('16000');
   const [collaborationCost, setCollaborationCost] = useState<string | number>('15000');
   const [adBoostCooperation, setAdBoostCooperation] = useState('愿意辅助投流');
+
+  // Additional collaboration rights
+  const [resourceType, setResourceType] = useState('1条Dedicated定制长视频');
+  const [videoOrLive, setVideoOrLive] = useState('视频');
+  const [canTeaserVideo, setCanTeaserVideo] = useState('是');
+  const [canTestimonial, setCanTestimonial] = useState('是');
+  const [portraitAuthDuration, setPortraitAuthDuration] = useState('1年');
+  const [canSecondaryCreation, setCanSecondaryCreation] = useState('是');
+  const [canProvideRawFootage, setCanProvideRawFootage] = useState('是');
+  const [canPinLinkOrMention, setCanPinLinkOrMention] = useState('是');
+  const [canProvideAdCode, setCanProvideAdCode] = useState('提供 Spark Code');
+  const [audiencePersona, setAudiencePersona] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [showAddonRights, setShowAddonRights] = useState(false);
 
   // Creative & Assets
   const [creativeDirection, setCreativeDirection] = useState('');
@@ -83,12 +96,23 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
       setFollowersCount(bd.followersCount || kol?.followers || '63,000');
       setTier(bd.tier || '中腰部');
       setRegion(bd.region || '俄罗斯');
-      setAccountAttribute(bd.accountAttribute || '个人创作者 / 车主');
       setAccountCategory(bd.accountCategory || '汽车');
       setAvgViews(bd.avgViews !== undefined ? bd.avgViews : '550000');
       setAvgEngagements(bd.avgEngagements !== undefined ? bd.avgEngagements : '16000');
       setCollaborationCost(bd.collaborationCost !== undefined ? bd.collaborationCost : '15000');
       setAdBoostCooperation(bd.adBoostCooperation || '愿意辅助投流');
+
+      setResourceType(bd.resourceType || '1条Dedicated定制长视频');
+      setVideoOrLive(bd.videoOrLive || '视频');
+      setCanTeaserVideo(bd.canTeaserVideo || '是');
+      setCanTestimonial(bd.canTestimonial || '是');
+      setPortraitAuthDuration(bd.portraitAuthDuration || '1年');
+      setCanSecondaryCreation(bd.canSecondaryCreation || '是');
+      setCanProvideRawFootage(bd.canProvideRawFootage || '是');
+      setCanPinLinkOrMention(bd.canPinLinkOrMention || '是');
+      setCanProvideAdCode(bd.canProvideAdCode || '提供 Spark Code');
+      setAudiencePersona(bd.audiencePersona || '');
+      setFeedback(bd.feedback || '');
 
       setCreativeDirection(bd.creativeDirection || content.briefText || '');
       
@@ -135,12 +159,23 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
       followersCount,
       tier,
       region,
-      accountAttribute,
       accountCategory,
+      category,
       avgViews,
       avgEngagements,
       collaborationCost,
       adBoostCooperation,
+      resourceType,
+      videoOrLive,
+      canTeaserVideo,
+      canTestimonial,
+      portraitAuthDuration,
+      canSecondaryCreation,
+      canProvideRawFootage,
+      canPinLinkOrMention,
+      canProvideAdCode,
+      audiencePersona,
+      feedback,
       creativeDirection,
       providedAssets: selectedAssets,
       remarks,
@@ -150,6 +185,9 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
       briefDocUrl,
     };
 
+    if (content.category !== category) {
+      dataService.updateContent({ ...content, category });
+    }
     dataService.submitBrief(content.id, payload, 'Agency');
     if (onSuccess) onSuccess();
     onClose();
@@ -161,12 +199,23 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
       followersCount,
       tier,
       region,
-      accountAttribute,
       accountCategory,
+      category,
       avgViews,
       avgEngagements,
       collaborationCost,
       adBoostCooperation,
+      resourceType,
+      videoOrLive,
+      canTeaserVideo,
+      canTestimonial,
+      portraitAuthDuration,
+      canSecondaryCreation,
+      canProvideRawFootage,
+      canPinLinkOrMention,
+      canProvideAdCode,
+      audiencePersona,
+      feedback,
       creativeDirection,
       providedAssets: selectedAssets,
       remarks,
@@ -176,6 +225,9 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
       briefDocUrl,
     };
 
+    if (content.category !== category) {
+      dataService.updateContent({ ...content, category });
+    }
     dataService.updateBriefData(content.id, payload);
     if (onSuccess) onSuccess();
     onClose();
@@ -385,6 +437,21 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      合作内容类型
+                    </label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value as ContentCategory)}
+                      className="w-full px-2.5 py-1.5 text-xs font-bold text-indigo-950 border border-indigo-200 rounded-lg bg-indigo-50/50"
+                    >
+                      <option value="二创">二创 (素材剪辑+原声)</option>
+                      <option value="原创">原创 (定制实拍)</option>
+                      <option value="直发">直发 (官方素材直发/免脚本)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       粉丝量 (Followers)
                     </label>
                     <input
@@ -422,21 +489,28 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
                       className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
                     />
                   </div>
+                </div>
 
+                {category === '直发' && (
+                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                    <span className="font-bold shrink-0">💡 直发提示：</span>
+                    <span>该视频为直发类型，核准通过 Brief 后将自动跳过脚本审核，直接进入视频成片审核阶段。</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      账号属性 (Attribute)
+                      账号类型 (Category)
                     </label>
                     <input
                       type="text"
-                      value={accountAttribute}
-                      onChange={(e) => setAccountAttribute(e.target.value)}
+                      value={accountCategory}
+                      onChange={(e) => setAccountCategory(e.target.value)}
                       className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       平均播放量 (Avg Views)
@@ -472,7 +546,9 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
                       className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white font-mono font-bold text-slate-800"
                     />
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       投流合作 (Ad Boost)
@@ -484,6 +560,139 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
                       className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
                     />
                   </div>
+                </div>
+
+                {/* Collapsible Add-on Rights & Collaboration Specs */}
+                <div className="pt-2 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddonRights(!showAddonRights)}
+                      className="text-xs font-bold text-indigo-700 hover:text-indigo-800 flex items-center gap-1.5 py-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{showAddonRights ? '▼ 收起附加合作权益与细则 (选填项)' : '▶ 展开附加合作权益与交付细则 (选填项)'}</span>
+                    </button>
+                    <span className="text-[10px] text-slate-400">肖像授权 / 原片交付 / 投流Code / 二创授权等</span>
+                  </div>
+
+                  {showAddonRights && (
+                    <div className="mt-3 p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-200/80 space-y-3 animate-fadeIn">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">合作资源形式</label>
+                          <input
+                            type="text"
+                            value={resourceType}
+                            onChange={(e) => setResourceType(e.target.value)}
+                            placeholder="如: 1条长视频"
+                            className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">形式 (视频/直播)</label>
+                          <select
+                            value={videoOrLive}
+                            onChange={(e) => setVideoOrLive(e.target.value)}
+                            className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                          >
+                            <option value="视频">视频</option>
+                            <option value="直播">直播</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">肖像授权官方时间</label>
+                          <input
+                            type="text"
+                            value={portraitAuthDuration}
+                            onChange={(e) => setPortraitAuthDuration(e.target.value)}
+                            placeholder="如: 1年 / 6个月"
+                            className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">投流授权Code</label>
+                          <input
+                            type="text"
+                            value={canProvideAdCode}
+                            onChange={(e) => setCanProvideAdCode(e.target.value)}
+                            placeholder="如: Spark Code / 是"
+                            className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <label className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-200">
+                          <span className="text-slate-600 text-[11px]">可发预热视频:</span>
+                          <select
+                            value={canTeaserVideo}
+                            onChange={(e) => setCanTeaserVideo(e.target.value)}
+                            className="text-xs font-bold bg-slate-100 rounded px-1"
+                          >
+                            <option value="是">是</option>
+                            <option value="否">否</option>
+                          </select>
+                        </label>
+                        <label className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-200">
+                          <span className="text-slate-600 text-[11px]">可配合证言:</span>
+                          <select
+                            value={canTestimonial}
+                            onChange={(e) => setCanTestimonial(e.target.value)}
+                            className="text-xs font-bold bg-slate-100 rounded px-1"
+                          >
+                            <option value="是">是</option>
+                            <option value="否">否</option>
+                          </select>
+                        </label>
+                        <label className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-200">
+                          <span className="text-slate-600 text-[11px]">授权二剪二创:</span>
+                          <select
+                            value={canSecondaryCreation}
+                            onChange={(e) => setCanSecondaryCreation(e.target.value)}
+                            className="text-xs font-bold bg-slate-100 rounded px-1"
+                          >
+                            <option value="是">是</option>
+                            <option value="否">否</option>
+                          </select>
+                        </label>
+                        <label className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-200">
+                          <span className="text-slate-600 text-[11px]">网盘原片交付:</span>
+                          <select
+                            value={canProvideRawFootage}
+                            onChange={(e) => setCanProvideRawFootage(e.target.value)}
+                            className="text-xs font-bold bg-slate-100 rounded px-1"
+                          >
+                            <option value="是">是</option>
+                            <option value="否">否</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">受众/粉丝画像 (Audience Demographics)</label>
+                          <input
+                            type="text"
+                            value={audiencePersona}
+                            onChange={(e) => setAudiencePersona(e.target.value)}
+                            placeholder="如: 25-45岁男性/汽车发烧友/科技数码"
+                            className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">沟通进展与反馈 (Feedback)</label>
+                          <input
+                            type="text"
+                            value={feedback}
+                            onChange={(e) => setFeedback(e.target.value)}
+                            placeholder="如: 已对接锁定排期"
+                            className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

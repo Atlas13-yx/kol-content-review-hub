@@ -17,7 +17,8 @@ import {
   Upload,
   BarChart3,
   Link,
-  ChevronRight
+  ChevronRight,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { ContentInlineProgressBar } from '../components/ContentProgressBar';
 import { StatusBadge } from '../components/StatusBadge';
@@ -293,23 +294,47 @@ export const VideoReviewPage: React.FC<VideoReviewPageProps> = ({ onNavigate }) 
 
                 {/* Video Info Box */}
                 <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-800">
-                        达人：{kol?.name || task.kolId} ({task.platform})
-                      </span>
-                      <span className="text-slate-400">|</span>
-                      <span className="font-semibold text-slate-600">
-                        视频版本：共 {videoVersions.length} 个版本
-                        {latestVideo && `（当前 V${latestVideo.versionNumber}）`}
-                      </span>
-                    </div>
-                    {task.videoApprovedAt && (
-                      <p className="text-emerald-700 text-[11px] font-medium flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>广汽国际终审已同意发布（{task.videoApprovedAt.slice(0, 10)}）</span>
-                      </p>
+                  <div className="flex items-center gap-3">
+                    {/* Cover Thumbnail if exists */}
+                    {(latestVideo?.coverUrl || task.coverUrl) ? (
+                      <div className="relative w-16 h-10 rounded-lg overflow-hidden bg-black border border-slate-200 shrink-0 shadow-2xs group">
+                        <img
+                          src={latestVideo?.coverUrl || task.coverUrl}
+                          alt="视频封面"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-purple-900/20" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-200/70 border border-slate-300 flex items-center justify-center text-slate-400 shrink-0">
+                        <Video className="w-5 h-5" />
+                      </div>
                     )}
+
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-800">
+                          达人：{kol?.name || task.kolId} ({task.platform})
+                        </span>
+                        <span className="text-slate-400">|</span>
+                        <span className="font-semibold text-slate-600">
+                          视频版本：共 {videoVersions.length} 个版本
+                          {latestVideo && `（当前 V${latestVideo.versionNumber}）`}
+                        </span>
+                        {(latestVideo?.coverUrl || task.coverUrl) && (
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200 flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3 text-purple-600" />
+                            <span>附定制封面</span>
+                          </span>
+                        )}
+                      </div>
+                      {task.videoApprovedAt && (
+                        <p className="text-emerald-700 text-[11px] font-medium flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>广汽国际终审已同意发布（{task.videoApprovedAt.slice(0, 10)}）</span>
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {latestVideo && (

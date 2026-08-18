@@ -69,6 +69,7 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({ onNavigate, onOpen
           // Category stats
           const targetOriginal = camp.targetOriginal ?? 3;
           const targetSecondary = camp.targetSecondary ?? 5;
+          const targetDirectPost = camp.targetDirectPost ?? 4;
 
           const completedOriginal = campContents.filter(
             (c) => (c.category === '原创' || (!c.category && c.id.endsWith('1'))) && c.stage === 'Completed'
@@ -76,9 +77,13 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({ onNavigate, onOpen
           const completedSecondary = campContents.filter(
             (c) => c.category === '二创' && c.stage === 'Completed'
           ).length;
+          const completedDirectPost = campContents.filter(
+            (c) => c.category === '直发' && c.stage === 'Completed'
+          ).length;
 
           const pctOriginal = Math.min(100, Math.round((completedOriginal / (targetOriginal || 1)) * 100));
           const pctSecondary = Math.min(100, Math.round((completedSecondary / (targetSecondary || 1)) * 100));
+          const pctDirectPost = Math.min(100, Math.round((completedDirectPost / (targetDirectPost || 1)) * 100));
 
           return (
             <div
@@ -132,7 +137,7 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({ onNavigate, onOpen
                   {camp.description || camp.brief || '暂无详细描述'}
                 </p>
 
-                {/* Completion Breakdown Banner: 原创 1/3, 二创 3/5 */}
+                {/* Completion Breakdown Banner: 原创, 二创, 直发 */}
                 <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-2">
                   <div className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
                     <span>Campaign 完成进度</span>
@@ -159,6 +164,17 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({ onNavigate, onOpen
                       </div>
                       <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                         <div className="h-full bg-purple-600 rounded-full transition-all" style={{ width: `${pctSecondary}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Direct Post */}
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] mb-0.5">
+                        <span className="font-semibold text-emerald-700">直发: {completedDirectPost}/{targetDirectPost} 篇</span>
+                        <span className="text-emerald-600 font-bold">{pctDirectPost}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-600 rounded-full transition-all" style={{ width: `${pctDirectPost}%` }} />
                       </div>
                     </div>
                   </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Video } from 'lucide-react';
+import { X, Video, Image as ImageIcon, Upload } from 'lucide-react';
 import { dataService } from '../services/dataService';
 
 interface NewVideoVersionModalProps {
@@ -21,8 +21,25 @@ export const NewVideoVersionModal: React.FC<NewVideoVersionModalProps> = ({
     'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-smartphone-with-a-green-screen-41544-large.mp4'
   );
   const [fileUrl, setFileUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [coverFileName, setCoverFileName] = useState('');
 
   if (!isOpen) return null;
+
+  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoverFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        if (dataUrl) {
+          setCoverUrl(dataUrl);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +48,13 @@ export const NewVideoVersionModal: React.FC<NewVideoVersionModalProps> = ({
       return;
     }
 
-    dataService.addNewVideoVersion(contentId, videoUrl.trim(), fileUrl.trim() || undefined);
+    dataService.addNewVideoVersion(
+      contentId,
+      videoUrl.trim(),
+      fileUrl.trim() || undefined,
+      coverUrl.trim() || undefined,
+      coverFileName.trim() || undefined
+    );
     onSuccess();
     onClose();
   };
@@ -73,6 +96,40 @@ export const NewVideoVersionModal: React.FC<NewVideoVersionModalProps> = ({
             />
           </div>
 
+          {/* Optional Video Cover */}
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-purple-600" />
+                <span>视频封面图 Video Cover (可选项)</span>
+              </label>
+              <span className="text-[10px] text-slate-500">未上传时默认截取首帧</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="flex-1 py-2 px-3 bg-white hover:bg-purple-50 border border-slate-300 hover:border-purple-300 rounded-lg text-xs font-semibold text-slate-700 flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-2xs">
+                <Upload className="w-3.5 h-3.5 text-purple-600" />
+                <span className="truncate">{coverFileName ? `已选: ${coverFileName}` : '上传封面图片 (JPG/PNG)'}</span>
+                <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+              </label>
+
+              <input
+                type="url"
+                placeholder="或贴入封面图外链 URL..."
+                value={coverUrl}
+                onChange={(e) => setCoverUrl(e.target.value)}
+                className="flex-1 px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+              />
+            </div>
+
+            {coverUrl && (
+              <div className="flex items-center gap-2.5 p-2 bg-white rounded-lg border border-purple-200">
+                <img src={coverUrl} alt="封面预览" className="w-14 h-9 object-cover rounded border border-slate-200 shrink-0" />
+                <span className="text-xs text-purple-900 truncate font-medium">{coverFileName || '自定义封面预览已加载'}</span>
+              </div>
+            )}
+          </div>
+
           <div className="bg-purple-50/70 border border-purple-200 rounded-lg p-3 text-[11px] text-purple-800">
             🔒 新提交的 Video V{nextVersionNumber} <strong>不会覆盖</strong> 之前的 Video V{nextVersionNumber - 1} 历史文件与审稿记录。提交后自动流转至 <strong>等待省广审核</strong>。
           </div>
@@ -87,7 +144,7 @@ export const NewVideoVersionModal: React.FC<NewVideoVersionModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm cursor-pointer"
             >
               提交 Video V{nextVersionNumber}
             </button>

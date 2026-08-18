@@ -129,7 +129,7 @@ export default function App() {
             <KolSelectionPage onNavigate={handleNavigate} />
           )}
 
-          {currentPage === 'brief-review' && (
+          {(currentPage === 'brief-review' || currentPage === 'content-initiation') && (
             <BriefReviewPage onNavigate={handleNavigate} />
           )}
 

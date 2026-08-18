@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import {
@@ -15,9 +14,6 @@ import {
   INITIAL_KOL_SELECTION_BATCHES,
   INITIAL_NOTIFICATIONS,
 } from './src/data/mockData.js';
-
-dotenv.config({ path: '.env.local' });
-dotenv.config();
 
 const PORT = 3000;
 const DATA_FILE = path.join(process.cwd(), 'data', 'db.json');

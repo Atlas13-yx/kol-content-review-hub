@@ -16,6 +16,7 @@ export const NewCampaignModal: React.FC<NewCampaignModalProps> = ({ isOpen, onCl
   const [endDate, setEndDate] = useState('2026-09-30');
   const [targetOriginal, setTargetOriginal] = useState('3');
   const [targetSecondary, setTargetSecondary] = useState('5');
+  const [targetDirectPost, setTargetDirectPost] = useState('4');
 
   if (!isOpen) return null;
 
@@ -35,6 +36,7 @@ export const NewCampaignModal: React.FC<NewCampaignModalProps> = ({ isOpen, onCl
       status: 'Active',
       targetOriginal: parseInt(targetOriginal, 10) || 0,
       targetSecondary: parseInt(targetSecondary, 10) || 0,
+      targetDirectPost: parseInt(targetDirectPost, 10) || 0,
     });
 
     onSuccess(created.id);
@@ -85,7 +87,7 @@ export const NewCampaignModal: React.FC<NewCampaignModalProps> = ({ isOpen, onCl
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
+          <div className="grid grid-cols-3 gap-3 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
             <div>
               <label className="block text-xs font-bold text-indigo-900 mb-1">原创目标篇数</label>
               <input
@@ -94,7 +96,7 @@ export const NewCampaignModal: React.FC<NewCampaignModalProps> = ({ isOpen, onCl
                 placeholder="例如: 3"
                 value={targetOriginal}
                 onChange={(e) => setTargetOriginal(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold"
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold"
               />
             </div>
             <div>
@@ -105,7 +107,18 @@ export const NewCampaignModal: React.FC<NewCampaignModalProps> = ({ isOpen, onCl
                 placeholder="例如: 5"
                 value={targetSecondary}
                 onChange={(e) => setTargetSecondary(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold"
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-indigo-900 mb-1">直发目标篇数</label>
+              <input
+                type="number"
+                min="0"
+                placeholder="例如: 4"
+                value={targetDirectPost}
+                onChange={(e) => setTargetDirectPost(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold"
               />
             </div>
           </div>

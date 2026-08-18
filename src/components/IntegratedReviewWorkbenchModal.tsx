@@ -25,6 +25,11 @@ import {
   ChevronDown,
   ChevronUp,
   BookOpen,
+  Image as ImageIcon,
+  Upload,
+  Trash2,
+  Eye,
+  Check,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { AssetType, ContentItem, Campaign, KOL, Review, ScriptVersion, VideoVersion, UserRole } from '../types';
@@ -86,6 +91,16 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
   const [finalFeedbackContent, setFinalFeedbackContent] = useState('');
   const [pastedImages, setPastedImages] = useState<string[]>([]);
 
+  // Video Cover State (可选项 - Video Cover Submission & Preview)
+  const [coverUrl, setCoverUrl] = useState<string>('');
+  const [coverFileName, setCoverFileName] = useState<string>('');
+  const [coverRemarks, setCoverRemarks] = useState<string>('');
+  const [coverInputUrl, setCoverInputUrl] = useState<string>('');
+  const [isEditingCover, setIsEditingCover] = useState<boolean>(false);
+  const [isCoverSaving, setIsCoverSaving] = useState<boolean>(false);
+  const [coverSaveSuccess, setCoverSaveSuccess] = useState<boolean>(false);
+  const [showCoverZoomModal, setShowCoverZoomModal] = useState<boolean>(false);
+
   // Clipboard Paste & Upload Image Handlers
   const handlePasteImage = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items;
@@ -128,6 +143,76 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
     setPastedImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Video Cover Handlers
+  const handleCoverFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCoverFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setCoverUrl(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCoverPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          setCoverFileName(`cover_${Date.now()}.png`);
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+            if (dataUrl) {
+              setCoverUrl(dataUrl);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    }
+  };
+
+  const handleApplyCoverUrl = () => {
+    if (coverInputUrl.trim()) {
+      setCoverUrl(coverInputUrl.trim());
+      setCoverFileName(coverInputUrl.split('/').pop() || 'custom_cover.jpg');
+      setCoverInputUrl('');
+    }
+  };
+
+  const handleSaveCover = () => {
+    if (!content) return;
+    setIsCoverSaving(true);
+    const targetVer = videoVersions.find((v) => v.versionNumber === currentVerNumber) || videoVersions[videoVersions.length - 1];
+    const versionId = targetVer?.id || '';
+    dataService.updateVideoCover(content.id, versionId, coverUrl, coverFileName, coverRemarks);
+    setIsCoverSaving(false);
+    setIsEditingCover(false);
+    setCoverSaveSuccess(true);
+    setTimeout(() => setCoverSaveSuccess(false), 3000);
+  };
+
+  const handleRemoveCover = () => {
+    if (!content) return;
+    if (window.confirm('确定要移除当前视频的定制封面图吗？（移除后将默认截取视频首帧作为封面）')) {
+      setCoverUrl('');
+      setCoverFileName('');
+      setCoverRemarks('');
+      setCoverInputUrl('');
+      setIsEditingCover(false);
+      const targetVer = videoVersions.find((v) => v.versionNumber === currentVerNumber) || videoVersions[videoVersions.length - 1];
+      const versionId = targetVer?.id || '';
+      dataService.updateVideoCover(content.id, versionId, '', '', '');
+    }
+  };
+
   // Load Data
   useEffect(() => {
     if (!isOpen || !effectiveContentId) return;
@@ -150,6 +235,14 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
           if (latestScript.scriptText) {
             setSubtitlesText(latestScript.scriptText);
           }
+        }
+
+        // Initialize cover from latest or selected video version
+        const targetVid = vvs.length > 0 ? vvs[vvs.length - 1] : undefined;
+        if (targetVid?.coverUrl || c.coverUrl) {
+          setCoverUrl(targetVid?.coverUrl || c.coverUrl || '');
+          setCoverFileName(targetVid?.coverFileName || 'video_cover.jpg');
+          setCoverRemarks(targetVid?.coverRemarks || '');
         }
       }
     };
@@ -198,7 +291,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
       const res = await dataService.auditBriefWithAi({
         contentTitle: content.title,
         campaignName: campaign?.name || '广汽国际出海营销',
-        campaignBrief: campaign?.brief || '重点突出巴黎车展首秀、欧洲五星安全、智驾系统与3000万下线品质背书。',
+        campaignBrief: campaign?.briefRequirement || '重点突出巴黎车展首秀、欧洲五星安全、智驾系统与3000万下线品质背书。',
         contentBrief: content.briefText || '多语种本地化测评视频，要求融入车展镜头与品牌 Tagline。',
         subtitlesText: subtitlesText.trim(),
         language: '多语种 (中/英/法/泰/阿)',
@@ -299,6 +392,15 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-extrabold text-base text-slate-900">{content.title}</h3>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  content.category === '二创'
+                    ? 'bg-purple-100 text-purple-800'
+                    : content.category === '直发'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-indigo-100 text-indigo-800'
+                }`}>
+                  {content.category || '原创'}
+                </span>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                   {effectiveAssetType === 'Video' ? '视频稿件审核' : '脚本稿件审核'} V{currentVerNumber}
                 </span>
@@ -681,13 +783,219 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
 
               {/* Video Player or Script Text Box */}
               {effectiveAssetType === 'Video' ? (
-                <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-300 shadow-xl aspect-video flex items-center justify-center group">
-                  <video
-                    src={latestVideoVer?.videoUrl || 'https://assets.mixkit.co/videos/preview/mixkit-car-driving-on-a-road-at-sunset-41221-large.mp4'}
-                    controls
-                    className="w-full h-full object-cover"
-                    poster="https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80"
-                  />
+                <div className="space-y-3">
+                  <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-300 shadow-xl aspect-video flex items-center justify-center group">
+                    <video
+                      src={latestVideoVer?.videoUrl || 'https://assets.mixkit.co/videos/preview/mixkit-car-driving-on-a-road-at-sunset-41221-large.mp4'}
+                      controls
+                      className="w-full h-full object-cover"
+                      poster={coverUrl || 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80'}
+                    />
+                  </div>
+
+                  {/* 视频封面图提交与核验卡片 (可选项 - Video Cover Submission & Verification) */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                          <ImageIcon className="w-4 h-4" />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-900">视频封面图 (Video Cover)</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                            可选项
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        {coverUrl ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>已提交定制封面</span>
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                            未上传 (默认视频首帧)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Cover Display or Edit Form */}
+                    {coverUrl && !isEditingCover ? (
+                      <div className="space-y-3">
+                        <div className="flex gap-3.5 bg-slate-50/80 p-3 rounded-xl border border-slate-200 items-start">
+                          {/* Thumbnail */}
+                          <div
+                            className="relative w-36 aspect-video bg-black rounded-lg overflow-hidden shrink-0 border border-slate-300 group cursor-pointer shadow-xs"
+                            onClick={() => setShowCoverZoomModal(true)}
+                            title="点击查看高清大图"
+                          >
+                            <img
+                              src={coverUrl}
+                              alt="视频定制封面"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                              <Eye className="w-4 h-4" />
+                            </div>
+                            <span className="absolute bottom-1 right-1 px-1 py-0.2 bg-black/70 text-white text-[9px] rounded font-mono">
+                              16:9 / 封面
+                            </span>
+                          </div>
+
+                          {/* Details */}
+                          <div className="flex-1 min-w-0 space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900 truncate" title={coverFileName || '定制封面.jpg'}>
+                                {coverFileName || '定制封面图.jpg'}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                {(currentVersionObj as VideoVersion | undefined)?.coverSubmittedAt?.slice(0, 16).replace('T', ' ') || '已就绪'}
+                              </span>
+                            </div>
+
+                            {coverRemarks ? (
+                              <p className="text-[11px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200 leading-tight">
+                                <span className="font-semibold text-slate-700">设计要点/说明：</span>
+                                {coverRemarks}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-slate-400 italic">
+                                （未填写封面说明，视频播放器已同步将此图作为首屏海报预览）
+                              </p>
+                            )}
+
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowCoverZoomModal(true)}
+                                className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 flex items-center gap-1 transition-colors shadow-2xs"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>大图预览</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingCover(true)}
+                                className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-[11px] font-semibold text-purple-700 flex items-center gap-1 transition-colors"
+                              >
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>更换封面</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleRemoveCover}
+                                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-[11px] font-semibold text-rose-700 flex items-center gap-1 transition-colors ml-auto"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>移除</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {coverSaveSuccess && (
+                          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 font-medium flex items-center gap-1.5 animate-in fade-in">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>封面图已成功保存并同步至当前视频版本与播放器海报！</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Upload / Submission Form Area */
+                      <div
+                        className="space-y-3 bg-slate-50/80 p-3.5 rounded-xl border border-dashed border-slate-300"
+                        onPaste={handleCoverPaste}
+                      >
+                        <div className="text-xs text-slate-600 space-y-1">
+                          <div className="font-semibold text-slate-800 flex items-center justify-between">
+                            <span>提交或更新定制视频封面（可选）：</span>
+                            <span className="text-[11px] text-purple-700 font-medium">支持本地上传 / Ctrl+V 粘贴 / 图片直链</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-normal">
+                            如达人针对 YouTube / TikTok / Instagram Reels 制作了专属吸睛大图封面，可在此快速提交。未提交时将默认使用视频首帧。
+                          </p>
+                        </div>
+
+                        {/* Controls */}
+                        <div className="space-y-2.5">
+                          {/* File Upload & Paste Area */}
+                          <div className="flex items-center gap-2">
+                            <label className="flex-1 py-2 px-3 bg-white hover:bg-purple-50 border border-slate-300 hover:border-purple-300 rounded-xl text-xs font-semibold text-slate-700 flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-2xs">
+                              <Upload className="w-3.5 h-3.5 text-purple-600" />
+                              <span className="truncate">{coverFileName ? `已选: ${coverFileName}` : '选择封面图片 (JPG/PNG/WebP)'}</span>
+                              <input type="file" accept="image/*" onChange={handleCoverFileUpload} className="hidden" />
+                            </label>
+
+                            <div className="text-[11px] text-slate-400 font-mono px-1">或</div>
+
+                            {/* URL Input */}
+                            <div className="flex-1 flex gap-1.5">
+                              <input
+                                type="url"
+                                placeholder="贴入图片直链 URL..."
+                                value={coverInputUrl}
+                                onChange={(e) => setCoverInputUrl(e.target.value)}
+                                className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleApplyCoverUrl}
+                                disabled={!coverInputUrl.trim()}
+                                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 disabled:opacity-40 text-slate-700 rounded-lg text-xs font-bold transition-colors shrink-0"
+                              >
+                                填入
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Optional Remarks input */}
+                          <input
+                            type="text"
+                            placeholder="封面文案 / 主视觉设计说明（可选，如：巴黎车展首发定妆主视觉大图）"
+                            value={coverRemarks}
+                            onChange={(e) => setCoverRemarks(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                          />
+
+                          {/* Pending Preview if image selected */}
+                          {coverUrl && (
+                            <div className="flex items-center gap-3 p-2.5 bg-purple-50/90 border border-purple-200 rounded-xl">
+                              <img src={coverUrl} alt="封面预览" className="w-16 h-10 object-cover rounded-lg border border-purple-200 shrink-0 shadow-2xs" />
+                              <div className="text-xs text-purple-900 flex-1 truncate">
+                                <span className="font-bold block truncate">{coverFileName || '已载入封面预览'}</span>
+                                <span className="text-[10px] text-purple-700">点击右侧按钮确认保存封面</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Bottom Actions */}
+                          <div className="flex items-center justify-end gap-2 pt-1">
+                            {isEditingCover && (
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingCover(false)}
+                                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                              >
+                                取消
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleSaveCover}
+                              disabled={!coverUrl || isCoverSaving}
+                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>{isCoverSaving ? '保存中...' : '保存 / 提交视频封面'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 flex-1 flex flex-col space-y-3 shadow-sm min-h-[360px]">
@@ -969,6 +1277,50 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
         </div>
 
       </div>
+
+      {/* Cover Image Zoom Lightbox Modal */}
+      {showCoverZoomModal && coverUrl && (
+        <div
+          className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setShowCoverZoomModal(false)}
+        >
+          <div
+            className="relative max-w-4xl w-full bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-700 p-3 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-white">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-purple-400" />
+                <span className="text-xs font-bold">{coverFileName || '视频定制封面大图预览'}</span>
+                <span className="px-2 py-0.5 rounded text-[10px] bg-purple-900/60 text-purple-300 border border-purple-700/50">
+                  16:9 / 9:16 高清定制封面
+                </span>
+              </div>
+              <button
+                onClick={() => setShowCoverZoomModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center max-h-[75vh] overflow-hidden bg-black/50 rounded-xl p-1">
+              <img
+                src={coverUrl}
+                alt="封面高清大图"
+                className="max-w-full max-h-[72vh] object-contain rounded-lg shadow-2xl"
+              />
+            </div>
+
+            {coverRemarks && (
+              <div className="p-3 text-xs text-slate-300 bg-slate-800/80 rounded-xl border border-slate-700 flex items-start gap-2">
+                <span className="text-purple-400 font-bold shrink-0">封面设计说明：</span>
+                <span className="leading-relaxed">{coverRemarks}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

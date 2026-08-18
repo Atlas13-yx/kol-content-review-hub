@@ -140,20 +140,26 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
         {(() => {
           const targetOriginal = campaign.targetOriginal ?? 3;
           const targetSecondary = campaign.targetSecondary ?? 5;
+          const targetDirectPost = campaign.targetDirectPost ?? 4;
+
           const completedOriginal = contents.filter(
             (c) => (c.category === '原创' || (!c.category && c.id.endsWith('1'))) && c.stage === 'Completed'
           ).length;
           const completedSecondary = contents.filter(
             (c) => c.category === '二创' && c.stage === 'Completed'
           ).length;
+          const completedDirectPost = contents.filter(
+            (c) => c.category === '直发' && c.stage === 'Completed'
+          ).length;
 
           const pctOriginal = Math.min(100, Math.round((completedOriginal / (targetOriginal || 1)) * 100));
           const pctSecondary = Math.min(100, Math.round((completedSecondary / (targetSecondary || 1)) * 100));
+          const pctDirectPost = Math.min(100, Math.round((completedDirectPost / (targetDirectPost || 1)) * 100));
 
           return (
             <div className="pt-2 border-t border-slate-100">
               <span className="font-bold text-slate-900 block mb-2">Campaign 内容产出完成情况：</span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100">
                   <div className="flex items-center justify-between font-bold text-xs text-indigo-900 mb-1">
                     <span>原创内容完成度</span>
@@ -171,6 +177,16 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
                   </div>
                   <div className="w-full h-2 bg-purple-200/60 rounded-full overflow-hidden">
                     <div className="h-full bg-purple-600 rounded-full" style={{ width: `${pctSecondary}%` }} />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
+                  <div className="flex items-center justify-between font-bold text-xs text-emerald-900 mb-1">
+                    <span>直发视频完成度</span>
+                    <span>{completedDirectPost} / {targetDirectPost} 篇 ({pctDirectPost}%)</span>
+                  </div>
+                  <div className="w-full h-2 bg-emerald-200/60 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${pctDirectPost}%` }} />
                   </div>
                 </div>
               </div>
@@ -225,7 +241,11 @@ export const CampaignDetailPage: React.FC<CampaignDetailPageProps> = ({
                       </td>
                       <td className="px-5 py-3.5">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          cat === '原创' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'
+                          cat === '原创'
+                            ? 'bg-indigo-100 text-indigo-800'
+                            : cat === '二创'
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-emerald-100 text-emerald-800'
                         }`}>
                           {cat}
                         </span>

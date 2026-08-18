@@ -24,6 +24,7 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
   const [status, setStatus] = useState<Campaign['status']>('Active');
   const [targetOriginal, setTargetOriginal] = useState('3');
   const [targetSecondary, setTargetSecondary] = useState('5');
+  const [targetDirectPost, setTargetDirectPost] = useState('4');
 
   const canEdit = dataService.canEditCampaign();
   const currentRole = dataService.getCurrentRole();
@@ -38,6 +39,7 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
       setStatus(campaign.status || 'Active');
       setTargetOriginal(String(campaign.targetOriginal ?? 3));
       setTargetSecondary(String(campaign.targetSecondary ?? 5));
+      setTargetDirectPost(String(campaign.targetDirectPost ?? 4));
     }
   }, [campaign]);
 
@@ -65,6 +67,7 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
       status,
       targetOriginal: parseInt(targetOriginal, 10) || 0,
       targetSecondary: parseInt(targetSecondary, 10) || 0,
+      targetDirectPost: parseInt(targetDirectPost, 10) || 0,
       updatedAt: new Date().toISOString(),
     };
 
@@ -152,7 +155,7 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">活动状态</label>
               <select
@@ -193,6 +196,21 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
                 min="0"
                 value={targetSecondary}
                 onChange={(e) => setTargetSecondary(e.target.value)}
+                className={`w-full px-3 py-2 text-xs border rounded-lg ${
+                  !canEdit
+                    ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed'
+                    : 'border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none'
+                }`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">直发篇数目标</label>
+              <input
+                type="number"
+                disabled={!canEdit}
+                min="0"
+                value={targetDirectPost}
+                onChange={(e) => setTargetDirectPost(e.target.value)}
                 className={`w-full px-3 py-2 text-xs border rounded-lg ${
                   !canEdit
                     ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed'

@@ -311,7 +311,11 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
               <span>主题 Topic: {content.topic}</span>
               <span className="text-slate-300">|</span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                content.category === '二创' ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800'
+                content.category === '二创'
+                  ? 'bg-purple-100 text-purple-800'
+                  : content.category === '直发'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-indigo-100 text-indigo-800'
               }`}>
                 {content.category || '原创'}
               </span>
@@ -468,9 +472,9 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                 </span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
-                <span className="text-[10px] text-slate-400 font-semibold block">地区 / 属性</span>
+                <span className="text-[10px] text-slate-400 font-semibold block">地区 / 类型</span>
                 <span className="font-bold text-slate-900 truncate block">
-                  {content.briefData.region || '俄罗斯'} · {content.briefData.accountAttribute || '车主'}
+                  {content.briefData.region || '俄罗斯'} · {content.briefData.accountCategory || '汽车'}
                 </span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
@@ -588,7 +592,17 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
           </div>
         </div>
 
-        {scriptVersions.length === 0 ? (
+        {content.category === '直发' ? (
+          <div className="p-6 text-center bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+              <Check className="w-3.5 h-3.5" />
+              直发类型视频：已跳过分镜脚本环节
+            </div>
+            <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+              该任务为<strong>【直发视频】</strong>，无需 KOL 提报脚本及分镜审核，达人直接根据 Brief / 官方素材制作成片并上传至下方的<strong>【Video 视频成片】</strong>模块进行初审与终审。
+            </p>
+          </div>
+        ) : scriptVersions.length === 0 ? (
           <div className="p-6 text-center text-slate-400 text-xs bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
             达人尚未提交脚本。点击上方“添加新脚本版本”进行录入。
           </div>
@@ -663,7 +677,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                           🤖 AI Agent 自动诊断：与 Brief 未匹配点 ({selectedScriptVer.aiAuditResult.unmatchedPoints?.length || 0}条)
                         </span>
                         <span className="px-2 py-0.5 bg-amber-200/80 rounded font-mono text-[10px]">
-                          Brief 契合度 {selectedScriptVer.aiAuditResult.score || 85}%
+                          Brief 契合度 {selectedScriptVer.aiAuditResult.briefMatchScore || 85}%
                         </span>
                       </div>
 

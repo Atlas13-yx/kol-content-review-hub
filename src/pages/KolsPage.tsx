@@ -90,6 +90,9 @@ export const KolsPage: React.FC<KolsPageProps> = ({ onNavigate, onOpenNewKol }) 
     if (tag.includes('二创')) {
       return 'bg-purple-50 text-purple-700 border-purple-200 font-medium';
     }
+    if (tag.includes('直发')) {
+      return 'bg-teal-50 text-teal-700 border-teal-200 font-medium';
+    }
     return 'bg-slate-100 text-slate-700 border-slate-200 font-medium';
   };
 
