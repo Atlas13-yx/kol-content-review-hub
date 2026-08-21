@@ -242,6 +242,7 @@ export interface ContentItem {
 
 export interface AiScriptAuditResult {
   score: number;
+  briefMatchScore?: number; // 兼容服务端逐条 Brief 核验返回的契合度字段
   overallPass: boolean;
   summary: string;
   unmatchedPoints: string[]; // 1, 2, 3 点与 Brief 未匹配/缺失项
@@ -302,6 +303,7 @@ export interface TimelineEvent {
 export type NotificationType =
   | 'stage_handover'     // 流程流转移交下一个负责人
   | 'campaign_deadline'  // Campaign 结束前3天提醒
+  | 'review_deadline'    // 审核任务临近截止提醒
   | 'kol_selection'      // 达人筛选提报/反馈提醒
   | 'reminder_publish'   // 视频通过后1天提醒上传链接
   | 'reminder_data'      // 发布后3天提醒补充数据

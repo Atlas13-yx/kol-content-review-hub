@@ -246,7 +246,10 @@ export const BriefReviewPage: React.FC<BriefReviewPageProps> = ({ onNavigate }) 
       }
 
       const defaultCamp = campaigns.find((c) => c.id === batchCampaignId) || campaigns[0];
-      const parsed = mapRawRowsToCandidates(rawRows, defaultCamp?.id || 'camp-1', defaultCamp?.name || '海外营销活动');
+      const orderedCampaigns = defaultCamp
+        ? [defaultCamp, ...campaigns.filter((campaign) => campaign.id !== defaultCamp.id)]
+        : campaigns;
+      const parsed = mapRawRowsToCandidates(rawRows, orderedCampaigns, kols);
       if (parsed.length === 0) {
         throw new Error('未能匹配到符合条件的立项行，请确保包含必填项（达人姓名/账号、合作模式、平台）。');
       }

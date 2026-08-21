@@ -296,7 +296,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
       const res = await dataService.auditBriefWithAi({
         contentTitle: content.title,
         campaignName: campaign?.name || '广汽国际出海营销',
-        campaignBrief: campaign?.briefRequirement || '重点突出巴黎车展首秀、欧洲五星安全、智驾系统与3000万下线品质背书。',
+        campaignBrief: campaign?.brief || '重点突出巴黎车展首秀、欧洲五星安全、智驾系统与3000万下线品质背书。',
         contentBrief: content.briefText || '多语种本地化测评视频，要求融入车展镜头与品牌 Tagline。',
         subtitlesText: subtitlesText.trim(),
         language: '多语种 (中/英/法/泰/阿)',
@@ -858,7 +858,11 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                                 {coverFileName || '定制封面图.jpg'}
                               </span>
                               <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                                {currentVersionObj?.coverSubmittedAt?.slice(0, 16).replace('T', ' ') || '已就绪'}
+                                {(effectiveAssetType === 'Video'
+                                  ? (currentVersionObj as VideoVersion | undefined)?.coverSubmittedAt
+                                      ?.slice(0, 16)
+                                      .replace('T', ' ')
+                                  : undefined) || '已就绪'}
                               </span>
                             </div>
 

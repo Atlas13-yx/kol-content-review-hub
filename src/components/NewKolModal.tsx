@@ -40,7 +40,7 @@ import { computeMetricsFromPastWorks, formatMetricNumber } from '../utils/kolMet
 interface NewKolModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (kolId: string) => void;
   initialKol?: KOL; // 若传入则为编辑模式，否则为新建录入
 }
 
@@ -252,6 +252,8 @@ export const NewKolModal: React.FC<NewKolModalProps> = ({
       new Set([rosterStatus, tier, ...selectedOutputTypes, ...customTags])
     ).filter(Boolean);
 
+    let savedKolId = initialKol?.id || '';
+
     if (isEditMode && initialKol) {
       dataService.updateKol({
         ...initialKol,
@@ -273,7 +275,7 @@ export const NewKolModal: React.FC<NewKolModalProps> = ({
         pastWorks: validPastWorks,
       });
     } else {
-      dataService.addKol({
+      const created = dataService.addKol({
         name: name.trim(),
         platform,
         followers: followers.trim() || '10.0万',
@@ -291,9 +293,10 @@ export const NewKolModal: React.FC<NewKolModalProps> = ({
         historicalMetrics: finalMetrics,
         pastWorks: validPastWorks,
       });
+      savedKolId = created.id;
     }
 
-    onSuccess();
+    onSuccess(savedKolId);
     onClose();
   };
 
