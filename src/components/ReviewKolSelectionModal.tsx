@@ -49,6 +49,7 @@ export const ReviewKolSelectionModal: React.FC<ReviewKolSelectionModalProps> = (
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [downloadToast, setDownloadToast] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -206,7 +207,7 @@ export const ReviewKolSelectionModal: React.FC<ReviewKolSelectionModalProps> = (
                   <a
                     href={batch.agencySheetUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -216,11 +217,9 @@ export const ReviewKolSelectionModal: React.FC<ReviewKolSelectionModalProps> = (
                 <a
                   href={batch.agencyFileUrl || '#'}
                   download={batch.agencyFileName}
-                  onClick={(e) => {
-                    if (!batch.agencyFileUrl || batch.agencyFileUrl.startsWith('http')) {
-                      // Simulated download notification
-                      alert(`正在下载省广提报表格：${batch.agencyFileName}`);
-                    }
+                  onClick={() => {
+                    setDownloadToast(`正在启动下载省广提报表格：${batch.agencyFileName}`);
+                    setTimeout(() => setDownloadToast(null), 3500);
                   }}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
                 >
@@ -229,6 +228,13 @@ export const ReviewKolSelectionModal: React.FC<ReviewKolSelectionModalProps> = (
                 </a>
               </div>
             </div>
+
+            {downloadToast && (
+              <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center gap-2 text-xs text-indigo-800 font-medium animate-in fade-in">
+                <Download className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>{downloadToast}</span>
+              </div>
+            )}
 
             {batch.agencyNotes && (
               <div className="text-xs text-slate-600 bg-white/80 border border-slate-200/60 rounded-xl p-3">

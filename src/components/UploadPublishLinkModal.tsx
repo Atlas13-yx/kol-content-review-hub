@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem } from '../types';
 import { dataService } from '../services/dataService';
-import { Link as LinkIcon, X, Calendar, Send, Building2, Clock } from 'lucide-react';
+import { Link as LinkIcon, X, Calendar, Send, Building2, Clock, AlertTriangle } from 'lucide-react';
 
 interface UploadPublishLinkModalProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ export const UploadPublishLinkModal: React.FC<UploadPublishLinkModalProps> = ({
 }) => {
   const [publishUrl, setPublishUrl] = useState('');
   const [publishedAt, setPublishedAt] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (content?.performanceData?.publishUrl) {
@@ -26,14 +27,16 @@ export const UploadPublishLinkModal: React.FC<UploadPublishLinkModalProps> = ({
       setPublishUrl('');
     }
     setPublishedAt(new Date().toISOString().split('T')[0]);
+    setFormError(null);
   }, [content]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!publishUrl.trim()) {
-      alert('请填写线上视频发布链接');
+      setFormError('请填写线上视频发布链接');
       return;
     }
 
@@ -78,6 +81,13 @@ export const UploadPublishLinkModal: React.FC<UploadPublishLinkModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+          {formError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-medium">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           <div>
             <label className="block font-bold text-slate-800 mb-1 flex items-center gap-1.5">
               <LinkIcon className="w-4 h-4 text-purple-600" />

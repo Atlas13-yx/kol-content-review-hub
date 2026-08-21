@@ -210,7 +210,7 @@ export const UploadKolSelectionModal: React.FC<UploadKolSelectionModalProps> = (
             >
               {campaigns.map((camp) => (
                 <option key={camp.id} value={camp.id}>
-                  {camp.name} ({camp.status}) - 预算: ¥{(camp.budget || 0).toLocaleString()}
+                  {camp.name} ({camp.status})
                 </option>
               ))}
             </select>

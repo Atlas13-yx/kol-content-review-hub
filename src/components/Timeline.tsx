@@ -62,6 +62,20 @@ export const Timeline: React.FC<TimelineProps> = ({ events }) => {
     }
   };
 
+  const formatTimestamp = (ts: string) => {
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleString('zh-CN', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+    return ts;
+  };
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
       <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
@@ -95,7 +109,7 @@ export const Timeline: React.FC<TimelineProps> = ({ events }) => {
                     <span className="text-xs font-bold text-slate-900">{evt.title}</span>
                     {getActorBadge(evt.actor)}
                   </div>
-                  <span className="text-[11px] font-mono text-slate-400">{evt.timestamp}</span>
+                  <span className="text-[11px] font-mono text-slate-400">{formatTimestamp(evt.timestamp)}</span>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">{evt.description}</p>
               </div>

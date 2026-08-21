@@ -41,6 +41,7 @@ export const AiBriefAuditModal: React.FC<AiBriefAuditModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<any>(null);
   const [customComment, setCustomComment] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const runAudit = async () => {
     if (!content) return;
@@ -97,6 +98,7 @@ export const AiBriefAuditModal: React.FC<AiBriefAuditModalProps> = ({
   };
 
   const handleApproveWithAi = () => {
+    setFormError(null);
     dataService.approveBrief(
       content.id,
       customComment || diagnosticResult?.suggestedReviewComments || '广汽国际已审核通过该 Brief 方案'
@@ -106,8 +108,9 @@ export const AiBriefAuditModal: React.FC<AiBriefAuditModalProps> = ({
   };
 
   const handleRequestRevisionWithAi = () => {
+    setFormError(null);
     if (!customComment.trim()) {
-      alert('请填写修改意见！');
+      setFormError('请在下方文本框填写修改意见后再退回！');
       return;
     }
     dataService.requestBriefRevision(content.id, customComment);
@@ -290,6 +293,12 @@ export const AiBriefAuditModal: React.FC<AiBriefAuditModalProps> = ({
 
               {/* Editable Suggested Review Feedback */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+                {formError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-xs text-rose-700 font-medium">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Building2 className="w-4 h-4 text-indigo-600" />

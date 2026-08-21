@@ -21,7 +21,15 @@ import {
   SystemNotification,
   NotificationType,
   InitiationCandidate,
+  KolTier,
+  KolRosterStatus,
+  KolHistoricalMetrics,
+  KolPastWork,
+  AuditLogEntry,
+  AuditActionType,
+  AuditSecurityLevel,
 } from '../types';
+import { computeMetricsFromPastWorks } from '../utils/kolMetrics';
 import {
   INITIAL_CAMPAIGNS,
   INITIAL_KOLS,
@@ -44,9 +52,12 @@ const STORAGE_KEYS = {
   TIMELINES: 'kol_hub_timelines_v1',
   KOL_SELECTION_BATCHES: 'kol_hub_kol_selection_batches_v1',
   NOTIFICATIONS: 'kol_hub_notifications_v1',
+  CUSTOM_TAGS: 'kol_hub_custom_tags_v1',
   USER_ROLE: 'kol_hub_user_role_v1',
   USER_ACCOUNT: 'kol_hub_user_account_v1',
   IS_LOGGED_IN: 'kol_hub_is_logged_in_v1',
+  AUDIT_LOGS: 'kol_hub_audit_logs_v1',
+  DATA_MASKING: 'kol_hub_data_masking_v1',
 };
 
 const DEFAULT_ACCOUNTS: Record<UserRole, UserAccount> = {
@@ -76,12 +87,16 @@ class DataService {
   private timelines: TimelineEvent[];
   private kolSelectionBatches: KolSelectionBatch[];
   private notifications: SystemNotification[];
+  private globalCustomTags: string[];
+  private auditLogs: AuditLogEntry[];
+  private isDataMaskingEnabled: boolean;
   private currentRole: UserRole;
   private currentUser: UserAccount | null;
   private isLoggedInState: boolean;
   private lastServerTimestamp: string = '';
   private listeners: Set<() => void> = new Set();
   private pollTimer: any = null;
+  private isFetchingServerData: boolean = false;
 
   constructor() {
     this.campaigns = this.loadFromStorage(STORAGE_KEYS.CAMPAIGNS, INITIAL_CAMPAIGNS);
@@ -93,6 +108,30 @@ class DataService {
     this.timelines = this.loadFromStorage(STORAGE_KEYS.TIMELINES, INITIAL_TIMELINES);
     this.kolSelectionBatches = this.loadFromStorage(STORAGE_KEYS.KOL_SELECTION_BATCHES, INITIAL_KOL_SELECTION_BATCHES);
     this.notifications = this.loadFromStorage(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    this.auditLogs = this.loadFromStorage(STORAGE_KEYS.AUDIT_LOGS, [
+      {
+        id: `audit-init-01`,
+        timestamp: new Date().toISOString(),
+        action: '系统安全策略初始化',
+        actionType: 'LOGIN',
+        operatorName: '系统安全守护进程',
+        operatorRole: 'System',
+        operatorIp: '127.0.0.1',
+        targetResource: 'System / SecurityBaseline',
+        details: '系统安全策略已激活：RBAC权限隔离、敏感数据脱敏保护、防暴力破解限制生效。',
+        securityLevel: 'INFO',
+      },
+    ]);
+    this.isDataMaskingEnabled = this.loadFromStorage(STORAGE_KEYS.DATA_MASKING, true);
+    this.globalCustomTags = this.loadFromStorage(STORAGE_KEYS.CUSTOM_TAGS, [
+      '高ROI',
+      '欧洲重点',
+      '中东核心',
+      '配合度极高',
+      '原片授权',
+      '自驾实测',
+      '科技极客',
+    ]);
     this.currentRole = this.loadFromStorage(STORAGE_KEYS.USER_ROLE, 'Me');
     this.isLoggedInState = this.loadFromStorage(STORAGE_KEYS.IS_LOGGED_IN, false);
     this.currentUser = this.loadFromStorage(
@@ -107,6 +146,18 @@ class DataService {
     // Initial sync from Express backend & start polling
     this.fetchServerData();
     this.startPolling();
+
+    // Listen for tab visibility changes to reduce unnecessary background polling
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          this.startPolling(20000); // Back off when tab is in background
+        } else {
+          this.fetchServerData();
+          this.startPolling(4000); // Resume responsive polling when tab is active
+        }
+      });
+    }
   }
 
   private loadFromStorage<T>(key: string, fallback: T): T {
@@ -129,6 +180,9 @@ class DataService {
       localStorage.setItem(STORAGE_KEYS.TIMELINES, JSON.stringify(this.timelines));
       localStorage.setItem(STORAGE_KEYS.KOL_SELECTION_BATCHES, JSON.stringify(this.kolSelectionBatches));
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(this.notifications));
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_TAGS, JSON.stringify(this.globalCustomTags));
+      localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(this.auditLogs));
+      localStorage.setItem(STORAGE_KEYS.DATA_MASKING, JSON.stringify(this.isDataMaskingEnabled));
       this.notifyListeners();
     } catch (e) {
       console.error('Failed to save to localStorage', e);
@@ -149,6 +203,8 @@ class DataService {
   // --- Backend Sync Methods ---
 
   private async fetchServerData() {
+    if (this.isFetchingServerData) return;
+    this.isFetchingServerData = true;
     try {
       const res = await fetch('/api/data');
       if (res.ok) {
@@ -173,14 +229,16 @@ class DataService {
       }
     } catch (e) {
       // Offline / fallback to local state
+    } finally {
+      this.isFetchingServerData = false;
     }
   }
 
-  private startPolling() {
+  private startPolling(intervalMs: number = 4000) {
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.pollTimer = setInterval(() => {
       this.fetchServerData();
-    }, 2500);
+    }, intervalMs);
   }
 
   public resetToDemoData() {
@@ -271,10 +329,10 @@ class DataService {
     return newCamp;
   }
 
-  public updateCampaign(camp: Campaign) {
+  public updateCampaign(camp: Campaign): boolean {
     if (!this.canEditCampaign()) {
-      alert('【权限拦截】Campaign 后期调整与排期修改权限仅开放给广汽国际 (Me)，省广仅支持新建与查看！');
-      return;
+      console.warn('【权限拦截】Campaign 后期调整与排期修改权限仅开放给广汽国际 (Me)，省广仅支持新建与查看！');
+      return false;
     }
 
     const index = this.campaigns.findIndex((c) => c.id === camp.id);
@@ -289,7 +347,9 @@ class DataService {
       })
         .then(() => this.fetchServerData())
         .catch(() => {});
+      return true;
     }
+    return false;
   }
 
   // --- Notification Methods ---
@@ -722,12 +782,34 @@ class DataService {
     return this.kols.find((k) => k.id === id);
   }
 
+  // Standard Tags System
+  public static readonly STANDARD_ROSTER_STATUSES: KolRosterStatus[] = ['白名单', '黑名单', '普通'];
+  public static readonly STANDARD_TIERS: KolTier[] = ['头部', '腰部', '尾部'];
+  public static readonly STANDARD_OUTPUT_TYPES: string[] = ['原创', '二创', '直发'];
+
   public addKol(kol: Omit<KOL, 'id' | 'createdAt' | 'updatedAt'>): KOL {
+    // Automatically synthesize tags array from structured fields if available
+    const synthesizedTags = Array.from(
+      new Set([
+        ...(kol.rosterStatus ? [kol.rosterStatus] : []),
+        ...(kol.tier ? [kol.tier] : []),
+        ...(kol.outputTypes || []),
+        ...(kol.customTags || []),
+        ...(kol.tags || []),
+      ])
+    ).filter(Boolean);
+
     const newKol: KOL = {
       ...kol,
-      tags: kol.tags || ['白名单'],
+      rosterStatus: kol.rosterStatus || '白名单',
+      tier: kol.tier || '腰部',
+      outputTypes: kol.outputTypes || ['原创'],
+      customTags: kol.customTags || [],
+      tags: synthesizedTags.length > 0 ? synthesizedTags : ['白名单', '腰部', '原创'],
       followers: kol.followers || '10.0万',
       avatar: kol.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      pastWorks: kol.pastWorks || [],
+      historicalMetrics: kol.historicalMetrics || {},
       id: `kol-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -738,7 +820,7 @@ class DataService {
     fetch('/api/kols', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(kol),
+      body: JSON.stringify(newKol),
     })
       .then(() => this.fetchServerData())
       .catch(() => {});
@@ -749,17 +831,110 @@ class DataService {
   public updateKol(kol: KOL) {
     const index = this.kols.findIndex((k) => k.id === kol.id);
     if (index !== -1) {
-      this.kols[index] = { ...kol, updatedAt: new Date().toISOString() };
+      // Re-synthesize tags array to keep in sync
+      const synthesizedTags = Array.from(
+        new Set([
+          ...(kol.rosterStatus ? [kol.rosterStatus] : []),
+          ...(kol.tier ? [kol.tier] : []),
+          ...(kol.outputTypes || []),
+          ...(kol.customTags || []),
+          ...(kol.tags || []),
+        ])
+      ).filter(Boolean);
+
+      this.kols[index] = {
+        ...kol,
+        tags: synthesizedTags,
+        updatedAt: new Date().toISOString(),
+      };
       this.saveToStorage();
 
       fetch(`/api/kols/${kol.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(kol),
+        body: JSON.stringify(this.kols[index]),
       })
         .then(() => this.fetchServerData())
         .catch(() => {});
     }
+  }
+
+  /**
+   * 添加达人过往发布作品链接与数据（自动计算均值与峰值）
+   */
+  public addKolPastWork(kolId: string, work: Omit<KolPastWork, 'id'>): KolPastWork | undefined {
+    const kol = this.getKolById(kolId);
+    if (!kol) return undefined;
+
+    const newWork: KolPastWork = {
+      ...work,
+      id: `pw-${Date.now()}`,
+    };
+
+    const updatedWorks = [newWork, ...(kol.pastWorks || [])];
+    const newMetrics = computeMetricsFromPastWorks(updatedWorks, kol.historicalMetrics);
+
+    this.updateKol({
+      ...kol,
+      pastWorks: updatedWorks,
+      historicalMetrics: newMetrics,
+    });
+
+    return newWork;
+  }
+
+  /**
+   * 修改达人过往发布作品（自动重新计算均值与峰值）
+   */
+  public updateKolPastWork(kolId: string, work: KolPastWork): void {
+    const kol = this.getKolById(kolId);
+    if (!kol) return;
+
+    const currentWorks = kol.pastWorks || [];
+    const index = currentWorks.findIndex((w) => w.id === work.id);
+    if (index !== -1) {
+      const updatedWorks = [...currentWorks];
+      updatedWorks[index] = work;
+      const newMetrics = computeMetricsFromPastWorks(updatedWorks, kol.historicalMetrics);
+      this.updateKol({
+        ...kol,
+        pastWorks: updatedWorks,
+        historicalMetrics: newMetrics,
+      });
+    }
+  }
+
+  /**
+   * 删除达人过往发布作品（自动重新计算均值与峰值）
+   */
+  public deleteKolPastWork(kolId: string, workId: string): void {
+    const kol = this.getKolById(kolId);
+    if (!kol) return;
+
+    const currentWorks = kol.pastWorks || [];
+    const updatedWorks = currentWorks.filter((w) => w.id !== workId);
+    const newMetrics = computeMetricsFromPastWorks(updatedWorks, kol.historicalMetrics);
+    this.updateKol({
+      ...kol,
+      pastWorks: updatedWorks,
+      historicalMetrics: newMetrics,
+    });
+  }
+
+  /**
+   * 更新达人过往数据统计指标
+   */
+  public updateKolHistoricalMetrics(kolId: string, metrics: KolHistoricalMetrics): void {
+    const kol = this.getKolById(kolId);
+    if (!kol) return;
+
+    this.updateKol({
+      ...kol,
+      historicalMetrics: {
+        ...(kol.historicalMetrics || {}),
+        ...metrics,
+      },
+    });
   }
 
   /**
@@ -771,6 +946,9 @@ class DataService {
     profileUrl?: string;
     platform?: Platform;
     tags?: string[];
+    tier?: KolTier;
+    rosterStatus?: KolRosterStatus;
+    outputTypes?: string[];
     category?: string;
     followers?: string;
     followersCount?: string;
@@ -795,6 +973,19 @@ class DataService {
         updated.followers = params.followers;
         needsUpdate = true;
       }
+      if (params.tier && existing.tier !== params.tier) {
+        updated.tier = params.tier;
+        needsUpdate = true;
+      }
+      if (params.rosterStatus && existing.rosterStatus !== params.rosterStatus) {
+        updated.rosterStatus = params.rosterStatus;
+        needsUpdate = true;
+      }
+      if (params.outputTypes && params.outputTypes.length > 0) {
+        const mergedOutputs = Array.from(new Set([...(updated.outputTypes || []), ...params.outputTypes]));
+        updated.outputTypes = mergedOutputs;
+        needsUpdate = true;
+      }
       if (params.tags && params.tags.length > 0) {
         const currentTags = updated.tags || [];
         const mergedTags = Array.from(new Set([...currentTags, ...params.tags]));
@@ -817,7 +1008,10 @@ class DataService {
       profileUrl: params.profileUrl?.trim() || `https://${platform.toLowerCase()}.com/user/${Date.now()}`,
       followers: params.followers || params.followersCount || '10.0万',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      tags: params.tags || ['中腰部', '汽车测评'],
+      rosterStatus: params.rosterStatus || '白名单',
+      tier: params.tier || '腰部',
+      outputTypes: params.outputTypes || ['原创'],
+      tags: params.tags || ['腰部', '原创'],
       category: params.category || '出海达人',
     });
 
@@ -831,8 +1025,10 @@ class DataService {
     if (!cleanTag) return;
     const tags = kol.tags || [];
     if (!tags.includes(cleanTag)) {
+      const customTags = kol.customTags || [];
       this.updateKol({
         ...kol,
+        customTags: [...customTags, cleanTag],
         tags: [...tags, cleanTag],
       });
     }
@@ -842,8 +1038,25 @@ class DataService {
     const kol = this.getKolById(kolId);
     if (!kol) return;
     const tags = kol.tags || [];
+    const customTags = kol.customTags || [];
+    const outputTypes = kol.outputTypes || [];
+
+    // If removing rosterStatus/tier, reset accordingly
+    let updatedRoster = kol.rosterStatus;
+    let updatedTier = kol.tier;
+    if (tag === '白名单' || tag === '黑名单' || tag === '普通') {
+      updatedRoster = '普通';
+    }
+    if (tag === '头部' || tag === '腰部' || tag === '尾部') {
+      updatedTier = undefined;
+    }
+
     this.updateKol({
       ...kol,
+      rosterStatus: updatedRoster,
+      tier: updatedTier,
+      outputTypes: outputTypes.filter((t) => t !== tag),
+      customTags: customTags.filter((t) => t !== tag),
       tags: tags.filter((t) => t !== tag),
     });
   }
@@ -857,10 +1070,79 @@ class DataService {
     });
   }
 
+  public getGlobalCustomTags(): string[] {
+    return [...this.globalCustomTags];
+  }
+
+  public addGlobalCustomTag(tag: string): void {
+    const clean = tag.trim();
+    if (!clean) return;
+    if (!this.globalCustomTags.includes(clean)) {
+      this.globalCustomTags.push(clean);
+      this.saveToStorage();
+    }
+  }
+
+  public removeGlobalCustomTag(tag: string): void {
+    this.globalCustomTags = this.globalCustomTags.filter((t) => t !== tag);
+    // Also remove from all KOLs customTags and tags
+    this.kols = this.kols.map((kol) => ({
+      ...kol,
+      customTags: (kol.customTags || []).filter((t) => t !== tag),
+      tags: (kol.tags || []).filter((t) => t !== tag),
+    }));
+    this.saveToStorage();
+  }
+
+  public renameGlobalCustomTag(oldTag: string, newTag: string): void {
+    const cleanNew = newTag.trim();
+    if (!cleanNew || oldTag === cleanNew) return;
+
+    // Update global list
+    this.globalCustomTags = this.globalCustomTags.map((t) => (t === oldTag ? cleanNew : t));
+    if (!this.globalCustomTags.includes(cleanNew)) {
+      this.globalCustomTags.push(cleanNew);
+    }
+    this.globalCustomTags = Array.from(new Set(this.globalCustomTags));
+
+    // Update all KOLs containing oldTag
+    this.kols = this.kols.map((kol) => {
+      const hasOldCustom = (kol.customTags || []).includes(oldTag);
+      const hasOldTags = (kol.tags || []).includes(oldTag);
+      if (!hasOldCustom && !hasOldTags) return kol;
+
+      const nextCustom = Array.from(
+        new Set((kol.customTags || []).map((t) => (t === oldTag ? cleanNew : t)))
+      );
+      const nextTags = Array.from(
+        new Set((kol.tags || []).map((t) => (t === oldTag ? cleanNew : t)))
+      );
+
+      return {
+        ...kol,
+        customTags: nextCustom,
+        tags: nextTags,
+      };
+    });
+
+    this.saveToStorage();
+  }
+
   public getAllAvailableTags(): string[] {
-    const defaultTags = ['白名单', '黑名单'];
-    const customTags = this.kols.flatMap((k) => k.tags || []);
-    return Array.from(new Set([...defaultTags, ...customTags])).filter(Boolean);
+    const defaultTags = ['白名单', '黑名单', '头部', '腰部', '尾部', ...DataService.STANDARD_OUTPUT_TYPES];
+    const kolCustomTags = this.kols.flatMap((k) => [
+      ...(k.tags || []),
+      ...(k.customTags || []),
+      ...(k.outputTypes || []),
+    ]);
+    return Array.from(new Set([...defaultTags, ...this.globalCustomTags, ...kolCustomTags])).filter(Boolean);
+  }
+
+  public getAllCustomTags(): string[] {
+    const kolCustomTags = this.kols.flatMap((k) => k.customTags || []);
+    return Array.from(new Set([...this.globalCustomTags, ...kolCustomTags])).filter(
+      (t) => !['白名单', '黑名单', '普通', '头部', '腰部', '尾部', '原创', '二创', '直发'].includes(t)
+    );
   }
 
   // --- Content Methods ---
@@ -1979,16 +2261,53 @@ class DataService {
     return this.currentUser;
   }
 
-  public async loginWithCredentials(username: string, password: string): Promise<UserAccount> {
+  public async send2FACode(username: string, password: string): Promise<{ success: boolean; maskedPhone?: string; devDemoCode?: string; message: string }> {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/send-2fa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || '双因子验证码发送失败，请核对账号密码！');
+      }
+      return data;
+    } catch (err: any) {
+      // Fallback for offline/local simulation
+      if ((username === 'gac_admin' && password === 'gac2026') || (username === 'agency_user' && password === 'agency2026')) {
+        const demoCode = '882026';
+        return {
+          success: true,
+          maskedPhone: username === 'gac_admin' ? '138****6888' : '139****9988',
+          devDemoCode: demoCode,
+          message: '双因子认证动态安全码已发送',
+        };
+      }
+      throw err;
+    }
+  }
+
+  public async loginWithCredentials(
+    username: string,
+    password: string,
+    twoFactorCode?: string,
+    require2FA: boolean = false
+  ): Promise<UserAccount> {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, twoFactorCode, require2FA }),
+      });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.needs2FA) {
+          const err: any = new Error(data.message || '需要完成双因子认证');
+          err.needs2FA = true;
+          throw err;
+        }
         throw new Error(data.message || '登录失败，请检查账号和密码！');
       }
 
@@ -2008,6 +2327,9 @@ class DataService {
       this.notifyListeners();
       return user;
     } catch (err: any) {
+      if (err.needs2FA) {
+        throw err;
+      }
       // Fallback for offline/local simulation if fetch fails
       if (username === 'gac_admin' && password === 'gac2026') {
         const user = DEFAULT_ACCOUNTS['Me'];
@@ -2098,7 +2420,113 @@ class DataService {
     return res.json();
   }
 
-  // 11. Reset Data to initial mock
+  // 12. Security Audit Logs & Compliance Methods (3.2.1 / 3.2.2 / 8.1)
+  public getAuditLogs(): AuditLogEntry[] {
+    return [...this.auditLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  public addAuditLog(
+    action: string,
+    actionType: AuditActionType,
+    targetResource: string,
+    details: string,
+    securityLevel: AuditSecurityLevel = 'INFO'
+  ): AuditLogEntry {
+    const entry: AuditLogEntry = {
+      id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      action,
+      actionType,
+      operatorName: this.currentUser?.name || (this.currentRole === 'Me' ? '广汽国际审核团队' : '省广代理商项目组'),
+      operatorRole: this.currentRole,
+      operatorIp: '127.0.0.1 (Web Client)',
+      targetResource,
+      details,
+      securityLevel,
+    };
+
+    this.auditLogs.unshift(entry);
+    if (this.auditLogs.length > 1000) {
+      this.auditLogs = this.auditLogs.slice(0, 1000);
+    }
+    this.saveToStorage();
+
+    // Async sync to server
+    fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    }).catch(() => {});
+
+    return entry;
+  }
+
+  public isDataMasking(): boolean {
+    return this.isDataMaskingEnabled;
+  }
+
+  public setDataMasking(enabled: boolean): void {
+    if (this.isDataMaskingEnabled !== enabled) {
+      this.isDataMaskingEnabled = enabled;
+      this.saveToStorage();
+      this.addAuditLog(
+        enabled ? '开启全局数据脱敏保护模式' : '解除全局数据脱敏（明文查看模式）',
+        'DATA_UNMASK_VIEW',
+        'System / DataMasking',
+        enabled
+          ? '已激活敏感信息自动脱敏防护（保护达人电话、邮箱与核心报价）'
+          : '已暂时解除脱敏查看真实敏感数据，操作已全量入库审计留痕。',
+        enabled ? 'INFO' : 'WARNING'
+      );
+    }
+  }
+
+  public logUnmaskAction(target: string, reason: string = '授权人员查看脱敏明文'): void {
+    this.addAuditLog(
+      '查看单条脱敏敏感信息明文',
+      'DATA_UNMASK_VIEW',
+      target,
+      `操作人查看了受保护的脱敏明文数据（原因：${reason}）。`,
+      'WARNING'
+    );
+  }
+
+  public logExportCompliance(fileName: string, recordCount: number, isMasked: boolean): void {
+    this.addAuditLog(
+      '导出业务数据表格 (Excel / CSV)',
+      'DATA_EXPORT_COMPLIANCE',
+      `Export / ${fileName}`,
+      `已完成数据导出合规检查，导出记录数: ${recordCount} 条，脱敏保护: ${isMasked ? '已脱敏' : '明文导出'}，已应用防公式注入 (DDE) 转义。`,
+      isMasked ? 'INFO' : 'WARNING'
+    );
+  }
+
+  // 13. Global Custom Tags Dictionary Methods
+  public getCustomTags(): string[] {
+    return [...this.globalCustomTags];
+  }
+
+  public addCustomTag(tag: string): boolean {
+    const trimmed = tag.trim();
+    if (!trimmed || this.globalCustomTags.includes(trimmed)) {
+      return false;
+    }
+    this.globalCustomTags.push(trimmed);
+    this.saveToStorage();
+    return true;
+  }
+
+  public deleteCustomTag(tag: string): boolean {
+    const prevLen = this.globalCustomTags.length;
+    this.globalCustomTags = this.globalCustomTags.filter((t) => t !== tag);
+    if (this.globalCustomTags.length !== prevLen) {
+      this.saveToStorage();
+      return true;
+    }
+    return false;
+  }
+
+  // 14. Reset Data to initial mock
   public resetData() {
     Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
     this.resetToDemoData();

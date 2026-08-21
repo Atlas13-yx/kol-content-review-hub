@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Plus,
   Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { Platform, Stage, Status, CurrentOwner, ContentCategory, BriefData } from '../types';
@@ -86,6 +87,7 @@ export const NewContentModal: React.FC<NewContentModalProps> = ({
   // Active Tab within modal for better UX
   const [activeTab, setActiveTab] = useState<'kol' | 'creative' | 'metrics'>('kol');
   const [showExampleModal, setShowExampleModal] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Dynamic campaign materials
   const campaignMaterials = dataService.getCampaignMaterials(campaignId);
@@ -129,16 +131,20 @@ export const NewContentModal: React.FC<NewContentModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent, submitDirectlyToGac: boolean = true) => {
     e.preventDefault();
+    setFormError(null);
     if (!kolName.trim()) {
-      alert('请填写合作达人名字 / 账号 ID (KOL Name)');
+      setFormError('请填写合作达人名字 / 账号 ID (KOL Name)');
+      setActiveTab('kol');
       return;
     }
     if (!profileUrl.trim()) {
-      alert('请填写达人主页跳转链接 (Profile URL)');
+      setFormError('请填写达人主页跳转链接 (Profile URL)');
+      setActiveTab('kol');
       return;
     }
     if (!title.trim()) {
-      alert('请填写 Content 任务标题');
+      setFormError('请填写 Content 任务标题');
+      setActiveTab('creative');
       return;
     }
 
@@ -979,6 +985,13 @@ export const NewContentModal: React.FC<NewContentModalProps> = ({
             </div>
           )}
         </form>
+
+        {formError && (
+          <div className="mx-6 mb-2 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700 text-xs font-semibold animate-in fade-in duration-150">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span>{formError}</span>
+          </div>
+        )}
 
         {/* Modal Footer Actions */}
         <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">

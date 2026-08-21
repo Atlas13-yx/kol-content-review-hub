@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Video, Image as ImageIcon, Upload } from 'lucide-react';
+import { X, Video, Image as ImageIcon, Upload, AlertTriangle } from 'lucide-react';
 import { dataService } from '../services/dataService';
 
 interface NewVideoVersionModalProps {
@@ -23,6 +23,7 @@ export const NewVideoVersionModal: React.FC<NewVideoVersionModalProps> = ({
   const [fileUrl, setFileUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
   const [coverFileName, setCoverFileName] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -43,8 +44,9 @@ export const NewVideoVersionModal: React.FC<NewVideoVersionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!videoUrl.trim()) {
-      alert('请填写视频预览 URL 或视频流地址');
+      setFormError('请填写视频预览 URL 或视频流地址');
       return;
     }
 
@@ -73,6 +75,13 @@ export const NewVideoVersionModal: React.FC<NewVideoVersionModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {formError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-medium">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">视频预览地址 Video URL *</label>
             <input

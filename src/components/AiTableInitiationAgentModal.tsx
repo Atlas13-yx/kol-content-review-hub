@@ -238,9 +238,10 @@ export const AiTableInitiationAgentModal: React.FC<AiTableInitiationAgentModalPr
 
   // Final Confirmation: Batch Create Contents
   const handleConfirmInitiation = () => {
+    setParseError(null);
     const selectedItems = candidates.filter((c) => c.selected);
     if (selectedItems.length === 0) {
-      alert('请至少勾选一条需要立项的任务！');
+      setParseError('请至少勾选一条需要立项的任务！');
       return;
     }
 
@@ -251,7 +252,7 @@ export const AiTableInitiationAgentModal: React.FC<AiTableInitiationAgentModalPr
       onSuccess(created.length);
       onClose();
     } catch (e: any) {
-      alert('立项失败：' + (e.message || '未知错误'));
+      setParseError('立项失败：' + (e.message || '未知错误'));
       setIsSubmitting(false);
     }
   };
@@ -482,6 +483,13 @@ export const AiTableInitiationAgentModal: React.FC<AiTableInitiationAgentModalPr
           ) : (
             /* STEP 2: Human-in-the-Loop Review & Confirmation Table */
             <div className="space-y-4">
+              {parseError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{parseError}</span>
+                </div>
+              )}
+
               {/* Batch Summary & Controls Banner */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-3">

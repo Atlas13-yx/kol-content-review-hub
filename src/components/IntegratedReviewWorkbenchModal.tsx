@@ -100,6 +100,8 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
   const [isCoverSaving, setIsCoverSaving] = useState<boolean>(false);
   const [coverSaveSuccess, setCoverSaveSuccess] = useState<boolean>(false);
   const [showCoverZoomModal, setShowCoverZoomModal] = useState<boolean>(false);
+  const [showRemoveCoverConfirm, setShowRemoveCoverConfirm] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Clipboard Paste & Upload Image Handlers
   const handlePasteImage = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -200,17 +202,20 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
   };
 
   const handleRemoveCover = () => {
+    setShowRemoveCoverConfirm(true);
+  };
+
+  const handleConfirmRemoveCover = () => {
     if (!content) return;
-    if (window.confirm('确定要移除当前视频的定制封面图吗？（移除后将默认截取视频首帧作为封面）')) {
-      setCoverUrl('');
-      setCoverFileName('');
-      setCoverRemarks('');
-      setCoverInputUrl('');
-      setIsEditingCover(false);
-      const targetVer = videoVersions.find((v) => v.versionNumber === currentVerNumber) || videoVersions[videoVersions.length - 1];
-      const versionId = targetVer?.id || '';
-      dataService.updateVideoCover(content.id, versionId, '', '', '');
-    }
+    setCoverUrl('');
+    setCoverFileName('');
+    setCoverRemarks('');
+    setCoverInputUrl('');
+    setIsEditingCover(false);
+    setShowRemoveCoverConfirm(false);
+    const targetVer = videoVersions.find((v) => v.versionNumber === currentVerNumber) || videoVersions[videoVersions.length - 1];
+    const versionId = targetVer?.id || '';
+    dataService.updateVideoCover(content.id, versionId, '', '', '');
   };
 
   // Load Data
@@ -291,7 +296,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
       const res = await dataService.auditBriefWithAi({
         contentTitle: content.title,
         campaignName: campaign?.name || '广汽国际出海营销',
-        campaignBrief: campaign?.briefRequirement || '重点突出巴黎车展首秀、欧洲五星安全、智驾系统与3000万下线品质背书。',
+        campaignBrief: campaign?.brief || '重点突出巴黎车展首秀、欧洲五星安全、智驾系统与3000万下线品质背书。',
         contentBrief: content.briefText || '多语种本地化测评视频，要求融入车展镜头与品牌 Tagline。',
         subtitlesText: subtitlesText.trim(),
         language: '多语种 (中/英/法/泰/阿)',
@@ -311,9 +316,10 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
   // Submit Review Form
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
     if (!currentVersionObj) {
-      alert('未找到待审核版本对象');
+      setFormError('未找到待审核版本对象');
       return;
     }
 
@@ -325,7 +331,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
 
     if (loggedInRole === 'Agency') {
       if (!agencyContent.trim() && pastedImages.length === 0) {
-        alert('请填写省广初审意见内容或粘贴审核截图');
+        setFormError('请填写省广初审意见内容或粘贴审核截图');
         return;
       }
       const fullContent = (agencyContent.trim() || '（无文字，已附带审核截图说明）') + imageNote;
@@ -333,7 +339,7 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
     } else {
       // Me (GAC International)
       if (outcome === 'Request Revision' && !finalFeedbackContent.trim() && pastedImages.length === 0) {
-        alert('选择“需要修改”时，必须填写反馈给达人的 Final Feedback（最终修改要求）或上传截图');
+        setFormError('选择“需要修改”时，必须填写反馈给达人的 Final Feedback（最终修改要求）或上传截图');
         return;
       }
 
@@ -852,7 +858,11 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                                 {coverFileName || '定制封面图.jpg'}
                               </span>
                               <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                                {(currentVersionObj as VideoVersion | undefined)?.coverSubmittedAt?.slice(0, 16).replace('T', ' ') || '已就绪'}
+                                {(effectiveAssetType === 'Video'
+                                  ? (currentVersionObj as VideoVersion | undefined)?.coverSubmittedAt
+                                      ?.slice(0, 16)
+                                      .replace('T', ' ')
+                                  : undefined) || '已就绪'}
                               </span>
                             </div>
 
@@ -1249,6 +1259,14 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                 )}
               </div>
 
+              {/* Form Validation Error Banner */}
+              {formError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700 text-xs font-semibold animate-in fade-in duration-150">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
               {/* Submit Button - Locked to current role */}
               <div className="pt-2">
                 <button
@@ -1318,6 +1336,39 @@ export const IntegratedReviewWorkbenchModal: React.FC<IntegratedReviewWorkbenchM
                 <span className="leading-relaxed">{coverRemarks}</span>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Remove Video Cover Confirmation Modal */}
+      {showRemoveCoverConfirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[110] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">移除定制封面图</h3>
+                <p className="text-xs text-slate-500">移除后系统将默认截取视频首帧作为封面</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRemoveCoverConfirm(false)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemoveCover}
+                className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                确认移除
+              </button>
+            </div>
           </div>
         </div>
       )}

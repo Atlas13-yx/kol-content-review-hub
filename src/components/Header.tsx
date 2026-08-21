@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Building2, LogOut, ChevronDown, User, Layers, Sparkles } from 'lucide-react';
+import { LogOut, ChevronDown, Layers, Settings } from 'lucide-react';
 import { UserRole, UserAccount } from '../types';
 
 interface HeaderProps {
@@ -8,6 +8,7 @@ interface HeaderProps {
   onOpenSwitchAccount: () => void;
   onLogout: () => void;
   onLogoClick?: () => void;
+  onNavigateSettings?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,6 +17,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSwitchAccount,
   onLogout,
   onLogoClick,
+  onNavigateSettings,
 }) => {
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs select-none">
@@ -39,8 +41,20 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Only 登录账号 + 退出 */}
-      <div className="flex items-center gap-3">
+      {/* Right: Quick Settings Button + Logged in User Pill + Logout */}
+      <div className="flex items-center gap-2.5">
+        {/* Settings Navigation Shortcut */}
+        {onNavigateSettings && (
+          <button
+            onClick={onNavigateSettings}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-slate-100/80 text-slate-700 transition-all text-xs font-semibold shadow-2xs cursor-pointer"
+            title="打开系统设置与合规中心"
+          >
+            <Settings className="w-4 h-4 text-slate-500" />
+            <span className="hidden sm:inline">设置</span>
+          </button>
+        )}
+
         {/* Logged in User Pill (Click to Switch Account) */}
         <button
           onClick={onOpenSwitchAccount}
