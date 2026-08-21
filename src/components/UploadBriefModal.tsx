@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Clock,
   ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { ContentItem, Platform, ContentCategory, BriefData } from '../types';
@@ -80,6 +81,7 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
   const [remarks, setRemarks] = useState('');
   const [briefDocUrl, setBriefDocUrl] = useState('');
   const [feedbackNotes, setFeedbackNotes] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'creative' | 'kol' | 'metrics'>('creative');
@@ -150,8 +152,10 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
 
   // Submit to GAC for review
   const handleAgencySubmit = () => {
+    setFormError(null);
     if (!creativeDirection.trim()) {
-      alert('请填写创作建议与核心诉求！');
+      setFormError('请填写创作建议与核心诉求后再提交！');
+      setActiveTab('creative');
       return;
     }
 
@@ -195,6 +199,7 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
 
   // Save changes without submitting
   const handleSaveOnly = () => {
+    setFormError(null);
     const payload: BriefData = {
       followersCount,
       tier,
@@ -235,6 +240,7 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
 
   // GAC Approve directly
   const handleGacApprove = () => {
+    setFormError(null);
     dataService.approveBrief(content.id, feedbackNotes || '同意此 Brief 方案，请推进脚本撰写');
     if (onSuccess) onSuccess();
     onClose();
@@ -242,8 +248,9 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
 
   // GAC Request Revision
   const handleGacRequestRevision = () => {
+    setFormError(null);
     if (!feedbackNotes.trim()) {
-      alert('请填写修改意见！');
+      setFormError('请在下方审核批注中填写修改意见后再退回！');
       return;
     }
     dataService.requestBriefRevision(content.id, feedbackNotes);
@@ -287,6 +294,14 @@ export const UploadBriefModal: React.FC<UploadBriefModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Error Banner */}
+        {formError && (
+          <div className="mx-6 mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-medium">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{formError}</span>
+          </div>
+        )}
 
         {/* Tab Nav */}
         <div className="px-6 pt-3 border-b border-slate-200/70 bg-white flex items-center gap-2">

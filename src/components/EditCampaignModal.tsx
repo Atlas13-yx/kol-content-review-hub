@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Lock, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { X, Calendar, Lock, ShieldAlert, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { Campaign } from '../types';
 import { dataService } from '../services/dataService';
 
@@ -25,6 +25,7 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
   const [targetOriginal, setTargetOriginal] = useState('3');
   const [targetSecondary, setTargetSecondary] = useState('5');
   const [targetDirectPost, setTargetDirectPost] = useState('4');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const canEdit = dataService.canEditCampaign();
   const currentRole = dataService.getCurrentRole();
@@ -40,6 +41,7 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
       setTargetOriginal(String(campaign.targetOriginal ?? 3));
       setTargetSecondary(String(campaign.targetSecondary ?? 5));
       setTargetDirectPost(String(campaign.targetDirectPost ?? 4));
+      setFormError(null);
     }
   }, [campaign]);
 
@@ -47,13 +49,14 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!canEdit) {
-      alert('【权限拦截】Campaign 调整权限仅限广汽国际 (Me) 操作！');
+      setFormError('【权限拦截】Campaign 调整权限仅限广汽国际 (Me) 操作！');
       return;
     }
 
     if (!name.trim()) {
-      alert('请填写 Campaign 名称');
+      setFormError('请填写 Campaign 名称');
       return;
     }
 
@@ -108,6 +111,13 @@ export const EditCampaignModal: React.FC<EditCampaignModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="p-6 pt-3 space-y-4">
+          {formError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Campaign 名称 *</label>
             <input

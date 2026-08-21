@@ -82,6 +82,8 @@ export const BriefReviewPage: React.FC<BriefReviewPageProps> = ({ onNavigate }) 
   const [aiAuditContent, setAiAuditContent] = useState<ContentItem | null>(null);
   const [confirmModalItem, setConfirmModalItem] = useState<ContentItem | null>(null);
   const [confirmNotes, setConfirmNotes] = useState('');
+  const [rejectModalItem, setRejectModalItem] = useState<ContentItem | null>(null);
+  const [rejectFeedback, setRejectFeedback] = useState('');
 
   // Batch Initiation In-Page states
   const [batchInputMode, setBatchInputMode] = useState<'upload' | 'paste'>('upload');
@@ -189,11 +191,16 @@ export const BriefReviewPage: React.FC<BriefReviewPageProps> = ({ onNavigate }) 
   };
 
   const handleRequestRevision = (task: ContentItem) => {
-    const feedback = prompt('请输入退回省广修改 Brief 的具体意见：', '请在 Brief 中进一步明确达人开篇抓人 Hook 与 3000 万对比口播细节。');
-    if (feedback) {
-      dataService.requestBriefRevision(task.id, feedback, currentRole === 'Me' ? 'Me' : 'Agency');
-      loadData();
-    }
+    setRejectModalItem(task);
+    setRejectFeedback('请在 Brief 中进一步明确达人开篇抓人 Hook 与 3000 万对比口播细节。');
+  };
+
+  const handleConfirmRejectBrief = () => {
+    if (!rejectModalItem || !rejectFeedback.trim()) return;
+    dataService.requestBriefRevision(rejectModalItem.id, rejectFeedback.trim(), currentRole === 'Me' ? 'Me' : 'Agency');
+    setRejectModalItem(null);
+    setRejectFeedback('');
+    loadData();
   };
 
   // Batch Initiation Actions in Page
@@ -239,10 +246,7 @@ export const BriefReviewPage: React.FC<BriefReviewPageProps> = ({ onNavigate }) 
       }
 
       const defaultCamp = campaigns.find((c) => c.id === batchCampaignId) || campaigns[0];
-      const orderedCampaigns = defaultCamp
-        ? [defaultCamp, ...campaigns.filter((campaign) => campaign.id !== defaultCamp.id)]
-        : campaigns;
-      const parsed = mapRawRowsToCandidates(rawRows, orderedCampaigns, kols);
+      const parsed = mapRawRowsToCandidates(rawRows, defaultCamp?.id || 'camp-1', defaultCamp?.name || '海外营销活动');
       if (parsed.length === 0) {
         throw new Error('未能匹配到符合条件的立项行，请确保包含必填项（达人姓名/账号、合作模式、平台）。');
       }
@@ -257,9 +261,10 @@ export const BriefReviewPage: React.FC<BriefReviewPageProps> = ({ onNavigate }) 
   };
 
   const handleConfirmBatchCreation = (submitDirectlyToGac: boolean) => {
+    setParseError(null);
     const selectedItems = parsedCandidates.filter((c) => c.selected);
     if (selectedItems.length === 0) {
-      alert('请至少勾选一条需要立项的达人 Brief 记录！');
+      setParseError('请至少勾选一条需要立项的达人 Brief 记录！');
       return;
     }
 
@@ -283,7 +288,7 @@ export const BriefReviewPage: React.FC<BriefReviewPageProps> = ({ onNavigate }) 
       loadData();
       setIsBatchSubmitting(false);
     } catch (err: any) {
-      alert('批量立项失败：' + (err.message || '未知错误'));
+      setParseError('批量立项失败：' + (err.message || '未知错误'));
       setIsBatchSubmitting(false);
     }
   };
@@ -834,7 +839,7 @@ export const BriefReviewPage: React.FC<BriefReviewPageProps> = ({ onNavigate }) 
                             <a
                               href={bd.briefDocUrl}
                               target="_blank"
-                              rel="noreferrer"
+                              rel="noopener noreferrer"
                               className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 text-[11px]"
                             >
                               <ExternalLink className="w-3 h-3" />
@@ -1529,6 +1534,69 @@ export const BriefReviewPage: React.FC<BriefReviewPageProps> = ({ onNavigate }) 
                 <span>
                   {confirmModalItem.category === '直发' ? '确认核准 · 进入视频审核' : '确认核准 · 进入脚本创作'}
                 </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Brief Rejection / Revision Request Modal */}
+      {rejectModalItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center">
+                <RotateCcw className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  退回 Brief 修改意见
+                </h3>
+                <p className="text-xs text-slate-500">
+                  任务将退回给省广团队重新修订 Brief 内容与策略
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
+              <div>
+                <strong>任务名称：</strong> {rejectModalItem.title}
+              </div>
+              <div>
+                <strong>合作达人：</strong> {getKol(rejectModalItem.kolId)?.name || rejectModalItem.kolId}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                具体修改要求与指导意见 <span className="text-rose-500">*</span>:
+              </label>
+              <textarea
+                rows={4}
+                value={rejectFeedback}
+                onChange={(e) => setRejectFeedback(e.target.value)}
+                className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none text-slate-800"
+                placeholder="请输入退回省广修改 Brief 的具体意见，例如开篇抓人 Hook、3000万对比口播细节或素材补充..."
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setRejectModalItem(null);
+                  setRejectFeedback('');
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                disabled={!rejectFeedback.trim()}
+                onClick={handleConfirmRejectBrief}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-rose-900/20 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>确认退回修改</span>
               </button>
             </div>
           </div>

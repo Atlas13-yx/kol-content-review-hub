@@ -58,6 +58,7 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
   // Advance Task Modal state
   const [confirmModalItem, setConfirmModalItem] = useState<ContentItem | null>(null);
   const [confirmNotes, setConfirmNotes] = useState('');
+  const [downloadToast, setDownloadToast] = useState<string | null>(null);
 
   const loadData = () => {
     setBatches(dataService.getKolSelectionBatches());
@@ -542,7 +543,7 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
                             <a
                               href={batch.agencySheetUrl}
                               target="_blank"
-                              rel="noreferrer"
+                              rel="noopener noreferrer"
                               className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-semibold"
                               title="打开在线表格"
                             >
@@ -552,7 +553,8 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
                           <a
                             href={batch.agencyFileUrl || '#'}
                             onClick={(e) => {
-                              alert(`正在下载省广提报表格：${batch.agencyFileName}`);
+                              setDownloadToast(`正在下载省广提报表格：${batch.agencyFileName}`);
+                              setTimeout(() => setDownloadToast(null), 3000);
                             }}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
                           >
@@ -665,7 +667,7 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
                                 <a
                                   href={batch.gacSheetUrl}
                                   target="_blank"
-                                  rel="noreferrer"
+                                  rel="noopener noreferrer"
                                   className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-semibold"
                                   title="打开广汽在线表格"
                                 >
@@ -675,7 +677,8 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
                               <a
                                 href={batch.gacFileUrl || '#'}
                                 onClick={(e) => {
-                                  alert(`正在下载广汽国际反馈表格：${batch.gacFileName}`);
+                                  setDownloadToast(`正在下载广汽国际反馈表格：${batch.gacFileName}`);
+                                  setTimeout(() => setDownloadToast(null), 3000);
                                 }}
                                 className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                                   isApproved
@@ -814,7 +817,7 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
                         <a
                           href={kol.profileUrl}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -911,6 +914,14 @@ export const KolSelectionPage: React.FC<KolSelectionPageProps> = ({ onNavigate }
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Download Toast Notification */}
+      {downloadToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <Download className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{downloadToast}</span>
         </div>
       )}
     </div>

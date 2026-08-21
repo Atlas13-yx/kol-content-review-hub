@@ -85,6 +85,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
   const [workbenchAssetType, setWorkbenchAssetType] = useState<AssetType>('Script');
   const [showUploadBriefModal, setShowUploadBriefModal] = useState(false);
   const [showAiBriefAuditModal, setShowAiBriefAuditModal] = useState(false);
+  const [showMarkCompletedModal, setShowMarkCompletedModal] = useState(false);
 
   const reloadData = () => {
     setCurrentRole(dataService.getCurrentRole());
@@ -157,10 +158,9 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
     setIsEditingBrief(false);
   };
 
-  const handleMarkCompleted = () => {
-    if (window.confirm('确定要将该 Content 内容任务标记为已完成 (Completed) 吗？')) {
-      dataService.markContentCompleted(contentId);
-    }
+  const handleConfirmMarkCompleted = () => {
+    dataService.markContentCompleted(contentId);
+    setShowMarkCompletedModal(false);
   };
 
   return (
@@ -178,8 +178,8 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
         <div className="flex items-center gap-2">
           {content.stage !== 'Completed' && (
             <button
-              onClick={handleMarkCompleted}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition-colors"
+              onClick={() => setShowMarkCompletedModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition-colors cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>标记为审核完成 (Mark as Completed)</span>
@@ -285,7 +285,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                       ）由省广团队补充录入该视频的播放量、3秒完播率、点赞、评论、收藏与转发互动数据。
                       {content.performanceData?.publishUrl && (
                         <span className="ml-1 text-emerald-300">
-                          (省广已提交上线链接：<a href={content.performanceData.publishUrl} target="_blank" rel="noreferrer" className="underline font-mono">{content.performanceData.publishUrl}</a>)
+                          (省广已提交上线链接：<a href={content.performanceData.publishUrl} target="_blank" rel="noopener noreferrer" className="underline font-mono">{content.performanceData.publishUrl}</a>)
                         </span>
                       )}
                     </p>
@@ -544,7 +544,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                   <a
                     href={content.briefData?.briefDocUrl || content.briefUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="text-indigo-600 hover:underline font-medium inline-flex items-center gap-1"
                   >
                     点击打开在线文档 <ExternalLink className="w-3 h-3" />
@@ -659,7 +659,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                       <a
                         href={selectedScriptVer.fileUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-sm inline-flex items-center gap-1 transition-colors"
                       >
                         <span>直接打开文档</span>
@@ -842,7 +842,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                       <a
                         href={selectedVideoVer.fileUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="text-purple-600 hover:underline font-semibold inline-flex items-center gap-1"
                       >
                         下载 HD 4K 高清原片素材 <ExternalLink className="w-3.5 h-3.5" />
@@ -1134,7 +1134,7 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
                 <a
                   href={content.performanceData.publishUrl}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="text-indigo-600 hover:text-indigo-800 hover:underline font-mono font-bold inline-flex items-center gap-1 truncate max-w-md text-xs"
                 >
                   {content.performanceData.publishUrl} <ExternalLink className="w-3.5 h-3.5 shrink-0" />
@@ -1259,6 +1259,42 @@ export const ContentDetailPage: React.FC<ContentDetailPageProps> = ({ contentId,
         onClose={() => setShowAiBriefAuditModal(false)}
         onApproveSuccess={reloadData}
       />
+
+      {/* Custom Mark As Completed Confirmation Modal */}
+      {showMarkCompletedModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-100">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 duration-100">
+            <div className="flex items-center gap-3 text-emerald-600">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">确认标记为审核完成？</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  标记后该任务将进入【Completed】归档状态，各方可随时查看全流程版本与审核记录。
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowMarkCompletedModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMarkCompleted}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+              >
+                确认完成
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

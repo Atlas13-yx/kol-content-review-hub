@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileText, Upload, Sparkles, Loader2, Link as LinkIcon, CheckCircle, Bot } from 'lucide-react';
+import { X, FileText, Upload, Sparkles, Loader2, Link as LinkIcon, CheckCircle, Bot, AlertTriangle } from 'lucide-react';
 import { dataService } from '../services/dataService';
 
 interface NewScriptVersionModalProps {
@@ -23,6 +23,7 @@ export const NewScriptVersionModal: React.FC<NewScriptVersionModalProps> = ({
   const [uploadedFileName, setUploadedFileName] = useState('');
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -81,8 +82,9 @@ export const NewScriptVersionModal: React.FC<NewScriptVersionModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!scriptText.trim()) {
-      alert('请填写脚本文本内容');
+      setFormError('请填写脚本文本内容后再提交！');
       return;
     }
 
@@ -91,9 +93,9 @@ export const NewScriptVersionModal: React.FC<NewScriptVersionModalProps> = ({
       await dataService.addNewScriptVersion(contentId, title.trim(), scriptText.trim(), fileUrl.trim() || undefined);
       onSuccess();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('提交失败，请重试');
+      setFormError('提交失败：' + (err.message || '网络异常，请重试'));
     } finally {
       setIsSubmitting(false);
     }
@@ -118,6 +120,13 @@ export const NewScriptVersionModal: React.FC<NewScriptVersionModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+          {formError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-medium">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           <div>
             <label className="block font-bold text-slate-800 mb-1">脚本版本标题说明</label>
             <input

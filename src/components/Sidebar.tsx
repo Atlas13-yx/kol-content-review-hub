@@ -12,7 +12,8 @@ import {
   Sparkles,
   Layers,
   Flame,
-  ChevronDown
+  ChevronDown,
+  Settings,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
 
@@ -28,7 +29,8 @@ export type NavPage =
   | 'kol-detail'
   | 'content-detail'
   | 'contents'
-  | 'my-reviews';
+  | 'my-reviews'
+  | 'settings';
 
 interface SidebarProps {
   currentPage: string;
@@ -138,6 +140,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: Users,
           badge: counts.kols,
           badgeColor: 'bg-slate-100 text-slate-700',
+        },
+      ],
+    },
+    {
+      title: '系统与合规',
+      items: [
+        {
+          id: 'settings',
+          label: '系统设置',
+          icon: Settings,
         },
       ],
     },

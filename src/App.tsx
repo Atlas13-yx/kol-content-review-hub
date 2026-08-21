@@ -15,12 +15,14 @@ import { KolSelectionPage } from './pages/KolSelectionPage';
 import { BriefReviewPage } from './pages/BriefReviewPage';
 import { ScriptReviewPage } from './pages/ScriptReviewPage';
 import { VideoReviewPage } from './pages/VideoReviewPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { NotificationToast } from './components/NotificationToast';
 import { NewContentModal } from './components/NewContentModal';
 import { NewCampaignModal } from './components/NewCampaignModal';
 import { NewKolModal } from './components/NewKolModal';
 import { LoginModal } from './components/LoginModal';
 import { LoginPage } from './components/LoginPage';
+import { SecurityAuditModal } from './components/SecurityAuditModal';
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(dataService.isLoggedIn());
@@ -35,6 +37,7 @@ export default function App() {
   const [showNewCampaignModal, setShowNewCampaignModal] = useState(false);
   const [showNewKolModal, setShowNewKolModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSecurityAuditModal, setShowSecurityAuditModal] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -72,13 +75,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/80 text-slate-900 font-sans flex flex-col antialiased">
-      {/* Top Header: Only Title + Login Account + Logout */}
+      {/* Top Header: Brand + Quick Settings + User + Logout */}
       <Header
         currentRole={currentRole}
         currentUser={currentUser}
         onOpenSwitchAccount={() => setShowLoginModal(true)}
         onLogout={handleLogout}
         onLogoClick={() => handleNavigate('dashboard')}
+        onNavigateSettings={() => handleNavigate('settings')}
       />
 
       {/* Top-Right Notification Toast System */}
@@ -173,6 +177,13 @@ export default function App() {
           {currentPage === 'my-reviews' && (
             <MyReviewsPage onNavigate={handleNavigate} />
           )}
+
+          {currentPage === 'settings' && (
+            <SettingsPage
+              onNavigate={handleNavigate}
+              onOpenSecurityAuditModal={() => setShowSecurityAuditModal(true)}
+            />
+          )}
         </main>
       </div>
 
@@ -208,6 +219,11 @@ export default function App() {
         onSuccess={(kolId) => {
           handleNavigate('kol-detail', { id: kolId });
         }}
+      />
+
+      <SecurityAuditModal
+        isOpen={showSecurityAuditModal}
+        onClose={() => setShowSecurityAuditModal(false)}
       />
     </div>
   );

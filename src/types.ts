@@ -66,8 +66,6 @@ export interface Campaign {
   name: string;
   description: string;
   brief: string;
-  briefRequirement?: string;
-  budget?: number;
   startDate: string;
   endDate: string;
   status: CampaignStatus;
@@ -79,6 +77,36 @@ export interface Campaign {
   updatedAt: string;
 }
 
+export type KolTier = '头部' | '腰部' | '尾部';
+export type KolRosterStatus = '白名单' | '黑名单' | '普通';
+
+export interface KolHistoricalMetrics {
+  avgViews?: number;               // 历史平均播放量
+  avgLikes?: number;               // 历史平均点赞数
+  avgComments?: number;            // 历史平均评论数
+  avgEngagementRate?: number;      // 历史平均互动率 (%)
+  highestViews?: number;           // 历史最高/爆款播放量
+  avgCpm?: number;                 // 历史合作 CPM 参考价 (元)
+  cooperationRating?: number;      // 历史合作评级 (1-5 星)
+  cooperatedBrandCount?: number;   // 过往合作汽车/出海品牌数
+  historicalCooperationNotes?: string; // 过往合作评价与配合度记录
+}
+
+export interface KolPastWork {
+  id: string;
+  title: string;                   // 作品标题 / 主题
+  url: string;                     // 发布的作品链接 (如 YouTube/TikTok/Instagram 链接)
+  platform?: Platform;             // 发布平台
+  publishDate?: string;            // 发布日期 (如 2026-04-10)
+  views?: number | string;         // 实际播放量 / 曝光量 (如: 450,000)
+  likes?: number | string;         // 实际点赞量 (如: 32,000)
+  comments?: number | string;      // 实际评论/互动数 (如: 1,800)
+  engagementRate?: number | string;// 单条互动率 (%)
+  category?: string;               // 产出类型 ('原创' | '二创' | '直发')
+  highlights?: string;             // 作品亮点 / 爆款要点 / 客户车型
+  cooperatedBrand?: string;        // 合作车企/品牌
+}
+
 export interface KOL {
   id: string;
   name: string;
@@ -86,10 +114,22 @@ export interface KOL {
   profileUrl: string;
   followers?: string;
   avatar: string;
-  tags?: string[]; // 达人标签 (如: '白名单', '黑名单', '核心S级', '二创达人', 自建分类等)
-  category?: string; // 达人所属分类
-  contact?: string; // 可选
-  notes?: string;   // 可选
+
+  // 统一达人库标签体系
+  rosterStatus?: KolRosterStatus;  // 黑白名单 ('白名单' | '黑名单' | '普通')
+  tier?: KolTier;                  // 定位 ('头部' | '腰部' | '尾部')
+  outputTypes?: string[];          // 产出类型 (如: 试驾测评, 深度解析, 出海溯源, 家庭自驾, 趣味剧情, 开箱体验, 街头访谈, 技术拆解, 生活Vlog)
+  customTags?: string[];           // 自定义标签
+  tags?: string[];                 // 达人所有聚合标签
+
+  // 过往数据与作品
+  historicalMetrics?: KolHistoricalMetrics; // 过往表现统计数据
+  pastWorks?: KolPastWork[];               // 过往发布的作品链接列表
+
+  category?: string;               // 达人所属分类/领域
+  region?: string;                 // 国家/地区
+  contact?: string;                // 联系方式 (邮箱/电话/WhatsApp等)
+  notes?: string;                  // 达人属性与配合度备注
   createdAt: string;
   updatedAt: string;
 }
@@ -202,7 +242,6 @@ export interface ContentItem {
 
 export interface AiScriptAuditResult {
   score: number;
-  briefMatchScore?: number;
   overallPass: boolean;
   summary: string;
   unmatchedPoints: string[]; // 1, 2, 3 点与 Brief 未匹配/缺失项
@@ -261,7 +300,6 @@ export interface TimelineEvent {
 }
 
 export type NotificationType =
-  | 'review_deadline'    // 审核截止时间提醒
   | 'stage_handover'     // 流程流转移交下一个负责人
   | 'campaign_deadline'  // Campaign 结束前3天提醒
   | 'kol_selection'      // 达人筛选提报/反馈提醒
@@ -357,4 +395,50 @@ export interface InitiationCandidate {
 
   warnings?: string[];
   status?: 'valid' | 'warning' | 'new_kol';
+}
+
+// --- 系统安全与合规基线相关类型定义 ---
+
+export type AuditSecurityLevel = 'INFO' | 'WARNING' | 'CRITICAL';
+
+export type AuditActionType =
+  | 'LOGIN'
+  | 'LOGIN_FAILED'
+  | 'LOGOUT'
+  | 'ROLE_SWITCH'
+  | 'EXPORT_DATA'
+  | 'KOL_CREATE'
+  | 'KOL_UPDATE'
+  | 'KOL_DELETE'
+  | 'BRIEF_UPLOAD'
+  | 'REVIEW_PASS'
+  | 'REVIEW_REJECT'
+  | 'AI_AUDIT'
+  | 'INITIATION_IMPORT'
+  | 'DATA_UNMASK_VIEW'
+  | 'DATA_EXPORT_COMPLIANCE'
+  | 'PASSWORD_CHANGE';
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  actionType: AuditActionType;
+  operatorName: string;
+  operatorRole: UserRole | 'System';
+  operatorIp?: string;
+  targetResource: string;
+  details: string;
+  securityLevel: AuditSecurityLevel;
+}
+
+export interface SecurityBaselineItem {
+  categoryNo: number;
+  categoryName: string;
+  subNo: string;
+  subName: string;
+  threeNo: string;
+  requirement: string;
+  satisfaction: '满足' | '不适用';
+  implementationNotes: string;
 }

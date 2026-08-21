@@ -13,6 +13,7 @@ import {
   FolderSync,
   Image as ImageIcon,
   Upload,
+  AlertTriangle,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { ContentItem, KOL, Campaign, AssetType } from '../types';
@@ -45,6 +46,7 @@ export const SmartUploadVersionModal: React.FC<SmartUploadVersionModalProps> = (
   const [coverFileName, setCoverFileName] = useState('');
   const [fileName, setFileName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [archiveSuccessInfo, setArchiveSuccessInfo] = useState<{
     content: ContentItem;
     kol: KOL;
@@ -178,8 +180,9 @@ export const SmartUploadVersionModal: React.FC<SmartUploadVersionModalProps> = (
   };
 
   const handleAutoCreateAndArchive = () => {
+    setFormError(null);
     if (!kolQuery.trim()) {
-      alert('请先输入达人名称');
+      setFormError('请先在上方输入达人名称！');
       return;
     }
     const kol = dataService.findOrCreateKolByName({
@@ -212,8 +215,9 @@ export const SmartUploadVersionModal: React.FC<SmartUploadVersionModalProps> = (
 
   const handleArchiveSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!selectedContentId) {
-      alert('请在下方匹配列表中选择要归档的目标 Content 任务！');
+      setFormError('请在下方列表中选择或新建要归档的目标 Content 任务！');
       return;
     }
 
@@ -368,6 +372,13 @@ export const SmartUploadVersionModal: React.FC<SmartUploadVersionModalProps> = (
         ) : (
           /* Archive Upload Form */
           <form onSubmit={handleArchiveSubmit} className="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
+            {formError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-medium">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
+
             {/* Step 1: Choose Asset Type */}
             <div>
               <label className="block text-xs font-bold text-slate-800 mb-2">
